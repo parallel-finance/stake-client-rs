@@ -1,0 +1,23 @@
+[package]
+authors     = ['Parallel Team']
+description = 'A decentralized lending protocol which allow users to earn "double interests" from staking and lending'
+edition     = '2018'
+homepage    = 'https://parallel.fi'
+name        = 'runtime'
+version     = '0.1.0'
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-std = "1.9.0"
+substrate-subxt = "0.15.0"
+substrate-subxt-proc-macro = "0.15.0"
+jsonrpsee-utils = "=0.2.0-alpha.3"
+serde = { version = "1.0.124", features = ["derive"] }
+serde_json = "1.0.64"
+codec = { package = "parity-scale-codec", version = "2.1", default-features = false, features = ["derive", "full"] }
+
+frame-support = "3.0.0"
+sp-runtime = "3.0.0"
+sp-core = "3.0.0"
+sp-keyring = "3.0.0"

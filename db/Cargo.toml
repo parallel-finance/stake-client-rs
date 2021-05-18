@@ -1,0 +1,11 @@
+[package]
+authors     = ['Parallel Team']
+description = 'A decentralized lending protocol which allow users to earn "double interests" from staking and lending'
+edition     = '2018'
+homepage    = 'https://parallel.fi'
+name        = 'db'
+version     = '0.1.0'
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]

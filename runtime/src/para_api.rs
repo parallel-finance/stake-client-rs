@@ -2,12 +2,12 @@ use sp_core::crypto::Pair as TraitPair;
 use sp_core::sr25519::Pair;
 use substrate_subxt::{Client, ClientBuilder, PairSigner, Signer,balances};
 use super::para_runtime::ParaRuntime;
-use crate::error::Error;
-use crate::command::Cmd;
+use super::error::Error;
 use sp_keyring::AccountKeyring;
 use super::para_runtime::FeedValues;
+use super::Parameters;
 use sp_runtime::FixedU128;
-pub async fn run(cmd: &Cmd) -> Result<(), Error> {
+pub async fn run(cmd: &Parameters) -> Result<(), Error> {
     let subxt_client = ClientBuilder::<ParaRuntime>::new()
         // .set_url(&cmd.ws_server)
         .set_url("ws://127.0.0.1:9844")

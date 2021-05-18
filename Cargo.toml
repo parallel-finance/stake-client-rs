@@ -1,21 +1,5 @@
-[package]
-name = "stake-client"
-version = "0.1.0"
-authors = ["MrPai <1164934857@qq.com>"]
-edition = "2018"
+[workspace]
+members = ["client", "db", "runtime"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-async-std = "1.9.0"
-substrate-subxt = "0.15.0"
-substrate-subxt-proc-macro = "0.15.0"
-jsonrpsee-utils = "=0.2.0-alpha.3"
-serde = { version = "1.0.124", features = ["derive"] }
-serde_json = "1.0.64"
-codec = { package = "parity-scale-codec", version = "2.1", default-features = false, features = ["derive", "full"] }
-structopt = '0.3.8'
-frame-support = "3.0.0"
-sp-runtime = "3.0.0"
-sp-core = "3.0.0"
-sp-keyring = "3.0.0"
+[profile.release]
+panic = "unwind"

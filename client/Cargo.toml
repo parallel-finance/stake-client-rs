@@ -1,0 +1,11 @@
+[package]
+authors     = ['Parallel Team']
+description = 'A decentralized lending protocol which allow users to earn "double interests" from staking and lending'
+edition     = '2018'
+homepage    = 'https://parallel.fi'
+name        = 'stake-client'
+version     = '0.1.0'
+[dependencies]
+structopt = '0.3.8'
+runtime = { package = 'runtime', path = '../runtime' }
+db = { package = 'db', path = '../db' }

@@ -2,10 +2,10 @@ use sp_core::crypto::Pair as TraitPair;
 use sp_core::sr25519::Pair;
 use substrate_subxt::{Client, ClientBuilder, PairSigner, Signer,balances};
 use super::relay_runtime::RelayRuntime;
-use crate::error::Error;
-use crate::command::Cmd;
+use super::error::Error;
+use super::Parameters;
 use sp_keyring::AccountKeyring;
-pub async fn run(cmd: &Cmd) -> Result<(), Error> {
+pub async fn run(cmd: &Parameters) -> Result<(), Error> {
     let subxt_client = ClientBuilder::<RelayRuntime>::new()
         .set_url(&cmd.ws_server)
         .skip_type_sizes_check()
