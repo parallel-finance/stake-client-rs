@@ -1,10 +1,10 @@
 use sp_core::crypto::Pair as TraitPair;
 use sp_core::sr25519::Pair;
 use substrate_subxt::{Client, ClientBuilder, PairSigner, Signer,balances};
-use super::para_runtime::ParaRuntime;
+use super::runtime::{ParaRuntime,CurrencyId};
 use super::error::Error;
 use sp_keyring::AccountKeyring;
-use super::para_runtime::FeedValues;
+use super::vanilla_oracle::FeedValues;
 use super::Parameters;
 use sp_runtime::FixedU128;
 pub async fn run(cmd: &Parameters) -> Result<(), Error> {
@@ -37,19 +37,8 @@ pub async fn submit_price(
     subxt_client: &Client<ParaRuntime>,
     signer: &(dyn Signer<ParaRuntime> + Send + Sync),
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let values = vec![(super::para_runtime::CurrencyId::DOT,FixedU128::from_inner(100u128))];
+    let values = vec![(CurrencyId::DOT,FixedU128::from_inner(100u128))];
     let result = subxt_client.submit(FeedValues { values }, signer).await?;
-    // let dest = AccountKeyring::Bob.to_account_id().into();
-    // let result = subxt_client
-    //     .submit(
-    //         FeedValues {
-    //             to: &dest,
-    //             amount: 10_000u128,
-    //         },
-    //         signer,
-    //     )
-    //     .await
-    //     .unwrap();
     println!("{:?}", result);
     Ok(())
 }

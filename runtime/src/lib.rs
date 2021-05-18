@@ -1,12 +1,10 @@
 #[macro_use]
 extern crate substrate_subxt_proc_macro;
 
-mod para_api;
-mod para_runtime;
-mod relay_api;
-mod relay_runtime;
+mod relaychain;
+mod parachain;
+mod pallets;
 mod error;
-use crate::error::Error;
 use async_std::task;
 
 //TODO 定义一个结构体接收参数，不依赖command
@@ -17,19 +15,12 @@ pub struct Parameters {
 }
 
 
-pub fn run(cmd: &Parameters) -> Result<(),Error> {
+pub fn run(cmd: &Parameters) -> Result<(),error::Error> {
     println!("cmd:{:?}", cmd);
 
-    let _ = task::block_on(relay_api::run(cmd))?;
-    let _ = task::block_on(para_api::run(cmd))?;
+    let _ = task::block_on(relaychain::api::run(cmd))?;
+    let _ = task::block_on(parachain::api::run(cmd))?;
 
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
