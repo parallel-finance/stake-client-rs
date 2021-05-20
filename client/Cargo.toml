@@ -6,6 +6,11 @@ homepage    = 'https://parallel.fi'
 name        = 'stake-client'
 version     = '0.1.0'
 [dependencies]
-structopt = '0.3.8'
-runtime = { package = 'runtime', path = '../runtime' }
-db = { package = 'db', path = '../db' }
+db          = { package = 'db', path = '../db' }
+diesel      = { version = '1.4.6', features = ['r2d2', 'postgres', 'chrono', 'uuid'] }
+lazy_static = '1.4.0'
+runtime     = { package = 'runtime', path = '../runtime' }
+serde       = { version = '1.0.126', features = ['derive'] }
+structopt   = '0.3.8'
+thiserror   = "1.0.24"
+toml        = "0.5.8"

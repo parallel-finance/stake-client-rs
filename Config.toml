@@ -1,0 +1,5 @@
+[postgres]
+db       = "staking"
+host     = "127.0.0.1:5432"
+password = ""
+username = ""
