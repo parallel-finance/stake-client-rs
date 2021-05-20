@@ -1,7 +1,7 @@
 mod config;
 mod error;
 mod command;
-
+mod test;
 use structopt::StructOpt;
 use lazy_static::lazy_static;
 
@@ -26,13 +26,13 @@ lazy_static! {
 
 fn main() {
     let cmd = command::Cmd::from_args();
-    let p = runtime::Parameters {
+    let p = test::Parameters {
         ws_server: cmd.ws_server,
         key_store: cmd.key_store,
     };
 
-    let conn = DB.get_connection().unwrap();
-    withdraw_tx.load::<WithdrawTx>(&conn).unwrap();
+    // let conn = DB.get_connection().unwrap();
+    // withdraw_tx.load::<WithdrawTx>(&conn).unwrap();
 
-    let _r = runtime::run(&p);
+    let _r = test::run(&p);
 }

@@ -14,3 +14,7 @@ serde       = { version = '1.0.126', features = ['derive'] }
 structopt   = '0.3.8'
 thiserror   = "1.0.24"
 toml        = "0.5.8"
+async-std = "1.9.0"
+sp-core = "3.0.0"
+substrate-subxt = "0.15.0"
+sp-keyring = "3.0.0"

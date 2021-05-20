@@ -1,3 +1,8 @@
+use thiserror::Error as ThisError;
+use substrate_subxt::Error as SubxtError;
+
+#[derive(ThisError, Debug)]
 pub enum Error {
-    XErrot
+    #[error("Substrate Subxt Error: `{0:?}`")]
+    SubxtError(#[from] SubxtError),
 }
