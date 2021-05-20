@@ -1,15 +1,7 @@
-pub fn read() {
-    println!("db read");
-}
+#[macro_use]
+extern crate diesel;
 
-pub fn write() {
-    println!("db write");
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+pub mod error;
+pub mod executor;
+pub mod model;
+pub mod schema;

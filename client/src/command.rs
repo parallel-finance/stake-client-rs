@@ -7,6 +7,6 @@ pub struct Cmd {
     pub ws_server: String,
 
     /// the keystore for signing
-    #[structopt(short, long, default_value="//Alice")]
+    #[structopt(short, long, default_value = "//Alice")]
     pub key_store: String,
 }
