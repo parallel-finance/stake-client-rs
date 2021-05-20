@@ -8,7 +8,7 @@ use crate::schema::{withdraw, withdraw_tx};
 #[primary_key(idx)]
 pub struct Withdraw {
     pub idx: i32,
-    pub strate: String,
+    pub state: String,
     pub created_at: NaiveDateTime,
 }
 
