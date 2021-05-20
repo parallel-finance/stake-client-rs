@@ -26,10 +26,13 @@ pub struct Config {
 
 impl Config {
     pub fn get_postgres_url(&self) -> String {
-        format!("postgres://{}:{}@{}/{}", self.postgres.username, self.postgres.password, self.postgres.host, self.postgres.db)
+        format!(
+            "postgres://{}:{}@{}/{}",
+            self.postgres.username, self.postgres.password, self.postgres.host, self.postgres.db
+        )
     }
 
-    pub fn from_file<P: AsRef<Path>>(p: P) ->  Result<Config> {
+    pub fn from_file<P: AsRef<Path>>(p: P) -> Result<Config> {
         Ok(toml::from_str(&read_to_string(p)?)?)
     }
 }

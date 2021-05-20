@@ -1,13 +1,13 @@
 use async_std::task;
-use substrate_subxt::Encoded;
-use substrate_subxt::{Client, ClientBuilder, PairSigner, Signer,balances};
 use runtime::error::Error;
-use sp_keyring::AccountKeyring;
-use runtime::relaychain::{self,runtime::RelayRuntime};
+use runtime::pallets::multisig::{ApproveAsMultiCall, AsMultiCall, Multisig, Timepoint};
 use runtime::parachain;
+use runtime::relaychain::{self, runtime::RelayRuntime};
 use sp_core::crypto::Pair as TraitPair;
 use sp_core::sr25519::Pair;
-use runtime::pallets::multisig::{ApproveAsMultiCall,AsMultiCall,Timepoint,Multisig};
+use sp_keyring::AccountKeyring;
+use substrate_subxt::Encoded;
+use substrate_subxt::{balances, Client, ClientBuilder, PairSigner, Signer};
 
 ///SHOULD BE DELETE!!!
 
@@ -18,8 +18,7 @@ pub struct Parameters {
     pub key_store: String,
 }
 
-
-pub fn run(cmd: &Parameters) -> Result<(),Error> {
+pub fn run(cmd: &Parameters) -> Result<(), Error> {
     println!("cmd:{:?}", cmd);
 
     let _ = task::block_on(run1(cmd))?;
@@ -27,7 +26,6 @@ pub fn run(cmd: &Parameters) -> Result<(),Error> {
 
     Ok(())
 }
-
 
 pub async fn run1(cmd: &Parameters) -> Result<(), Error> {
     let subxt_client = ClientBuilder::<RelayRuntime>::new()
@@ -50,31 +48,37 @@ pub async fn submit(
     signer: &(dyn Signer<RelayRuntime> + Send + Sync),
 ) -> Result<(), Error> {
     let dest = AccountKeyring::Eve.to_account_id().into();
-    let call = relaychain::api::balances_transfer_call::<RelayRuntime>(&dest, 2_000_000_000_000u128);
+    let call =
+        relaychain::api::balances_transfer_call::<RelayRuntime>(&dest, 2_000_000_000_000u128);
     // let mc = relaychain::api::multisig_approve_as_multi_call::<RelayRuntime,balances::TransferCall<RelayRuntime>>(
     //     subxt_client,
-    //     2, 
-    //     vec![AccountKeyring::Bob.to_account_id(),AccountKeyring::Charlie.to_account_id()], 
-    //     None, 
-    //     call, 
+    //     2,
+    //     vec![AccountKeyring::Bob.to_account_id(),AccountKeyring::Charlie.to_account_id()],
+    //     None,
+    //     call,
     //     0u64
     // )?;
     // let result = subxt_client.submit(mc,signer,).await.unwrap();
-    
+
     //TODO 根据交易hash获取timepoint，如果成功返回，插入到db中
-    
+
     let bob = PairSigner::<RelayRuntime, _>::new(AccountKeyring::Bob.pair());
-    let mc = relaychain::api::multisig_as_multi_call::<RelayRuntime,balances::TransferCall<RelayRuntime>>(
+    let mc = relaychain::api::multisig_as_multi_call::<
+        RelayRuntime,
+        balances::TransferCall<RelayRuntime>,
+    >(
         subxt_client,
-        2, 
-        vec![AccountKeyring::Charlie.to_account_id(),AccountKeyring::Alice.to_account_id()], 
-        Some(Timepoint::new(37076,1)), 
-        call, 
+        2,
+        vec![
+            AccountKeyring::Charlie.to_account_id(),
+            AccountKeyring::Alice.to_account_id(),
+        ],
+        Some(Timepoint::new(37076, 1)),
+        call,
         false,
         1_000_000_000_000,
     )?;
-    let result = subxt_client.submit(mc,&bob,).await.unwrap();
-
+    let result = subxt_client.submit(mc, &bob).await.unwrap();
 
     println!("{:?}", result);
     Ok(())
