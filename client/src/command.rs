@@ -27,31 +27,6 @@ pub fn get_app<'a, 'b>() -> App<'a, 'b> {
                 .about("Print multi signature account addresses"),
             SubCommand::with_name("show")
                 .about("Print detail information of wallet")
-                .arg(
-                    Arg::with_name("name")
-                        .help("The name of keystore file")
-                        .required(true),
-                )
-                .arg(
-                    Arg::with_name("password")
-                        .help("The password you want to set")
-                        .required(true),
-                )
-                .arg(
-                    Arg::with_name("threshold")
-                        .help("The threshold of multi signature account")
-                        .required(true),
-                )
-                .arg(
-                    Arg::with_name("address")
-                        .help("The address of keystore")
-                        .required(true),
-                )
-                .arg(
-                    Arg::with_name("others")
-                        .help("The other signer address of multi signature account")
-                        .required(true),
-                ),
             SubCommand::with_name("create")
                 .about("Submit a transfer transaction")
                 .args_from_usage(

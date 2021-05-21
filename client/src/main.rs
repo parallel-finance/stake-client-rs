@@ -30,6 +30,15 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use wallet::*;
 
+fn default_keystore_path() -> PathBuf {
+    let mut path = dirs::home_dir().unwrap();
+    path.push("./");
+    if !path.exists() {
+        fs::create_dir_all(path.clone()).expect("Failed to create default data path");
+    }
+    path
+}
+
 fn default_path() -> PathBuf {
     let mut path = dirs::home_dir().unwrap();
     path.push(".stakewallet");
@@ -50,8 +59,6 @@ lazy_static! {
 
 #[async_std::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
-    println!("keystore start");
-
     let mut app = command::get_app();
     let matches = app.clone().get_matches();
 
@@ -87,26 +94,34 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         }
 
         ("create", Some(matches)) => {
-            let _name = matches.value_of("name").unwrap_or("");
+            let name = matches.value_of("name").unwrap_or("");
             let threshold = matches.value_of("threshold").unwrap();
             let seed = matches.value_of("seed").unwrap();
             let others = matches.value_of("others").unwrap();
             let mut split = others.split(",");
             let others_split: Vec<&str> = split.collect();
-            let mut others_addr = vec![];
+            let mut other_addresses = vec![];
             for a in others_split.iter() {
                 let _check = AccountId::from_ss58check(a).map_err(|_err| "Invalid address")?;
-                others_addr.push(a.to_string());
+                other_addresses.push(a.to_string());
             }
 
+            // create multi signature keystore
             let password = rpassword::read_password_from_tty(Some("Set password: ")).ok();
             let mut keystore = create_keystore(
                 password,
                 threshold.to_string().parse().unwrap(),
                 seed.to_string(),
-                others_addr,
-            );
-            println!("keystore:{:?}", keystore);
+                other_addresses,
+            )?;
+
+            // create keystore file
+            let file_name = format!("{}.json", name);
+            if let Err(e) = fs::write(file_name.clone(), keystore.to_json()) {
+                println!("failed to write to file: {:?}", e);
+            } else {
+                println!("keystore file created:{}\n{:?}", file_name, keystore);
+            }
         }
 
         _ => {

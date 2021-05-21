@@ -39,7 +39,8 @@ pub fn create_keystore(
         other_signatories.push(account_id);
     }
     let signatories = ensure_sorted_and_insert(other_signatories, pair.public().into())
-        .map_err(|_err| "failed to sort other signatories")?;
+        .map_err(|_err| "failed to sort signatories")?;
+    println!("{:?}", signatories);
     let id = multi_account_id(&signatories, 1);
 
     let k = Keystore {
