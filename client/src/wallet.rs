@@ -13,6 +13,11 @@ use std::time::SystemTime;
 
 const DEFAULT_WALLET_NAME: &'static str = "multi-sig-wallet";
 
+pub fn get_keystore(path: String) -> Result<Keystore, Box<dyn std::error::Error>> {
+    let k = Keystore::parse_from_file(path).map_err(|_err| "failed to get keystore from file")?;
+    Ok(k)
+}
+
 pub fn create_keystore(
     password: Option<String>,
     threshold: u64,

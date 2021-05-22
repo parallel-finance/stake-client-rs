@@ -67,8 +67,12 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // set_default_ss58_version(Ss58AddressFormat::PolkadotAccount);
 
     match matches.subcommand() {
-        ("start", Some(_)) => {
+        ("start", Some(matches)) => {
+            let file = matches.value_of("file").unwrap();
             println!("start client ...");
+            let keystore = get_keystore(file.to_string());
+            println!("{:?}", keystore);
+
             let cmd = command::Cmd::from_args();
             let p = test::Parameters {
                 ws_server: cmd.ws_server,
@@ -94,7 +98,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         }
 
         ("create", Some(matches)) => {
-            let name = matches.value_of("name").unwrap_or("");
+            let name = matches.value_of("name").unwrap();
             let threshold = matches.value_of("threshold").unwrap();
             let seed = matches.value_of("seed").unwrap();
             let others = matches.value_of("others").unwrap();

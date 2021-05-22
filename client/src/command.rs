@@ -21,12 +21,16 @@ pub fn get_app<'a, 'b>() -> App<'a, 'b> {
         .about("Multi signature wallet for staking.")
         .version(env!("CARGO_PKG_VERSION"))
         .subcommands(vec![
-            SubCommand::with_name("start").about("Start client"),
+            SubCommand::with_name("start")
+                .about("Start client")
+                .args_from_usage(
+                    "
+            <file>  'The keystore filename with path'",
+                ),
             SubCommand::with_name("getaddress").about("Print account address"),
             SubCommand::with_name("getmultiaddress")
                 .about("Print multi signature account addresses"),
-            SubCommand::with_name("show")
-                .about("Print detail information of wallet")
+            SubCommand::with_name("show").about("Print detail information of wallet"),
             SubCommand::with_name("create")
                 .about("Submit a transfer transaction")
                 .args_from_usage(
