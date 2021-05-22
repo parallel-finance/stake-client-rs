@@ -1,5 +1,4 @@
 use sp_runtime::{
-    generic,
     traits::{IdentifyAccount, Verify},
     MultiSignature,
 };

@@ -12,22 +12,13 @@ use config::Config;
 use db::executor::DbExecutor;
 use db::model::WithdrawTx;
 use db::schema::withdraw_tx::dsl::*;
-use diesel::{
-    self, query_dsl::BelongingToDsl, result::Error, BoolExpressionMethods, Connection,
-    ExpressionMethods, QueryDsl, RunQueryDsl,
-};
 use lazy_static::lazy_static;
 use structopt::StructOpt;
 
-use crate::crypto::Sr25519;
 use crypto::*;
-use frame_system::Event;
-use keystore::Keystore;
 use primitives::AccountId;
-use sp_core::crypto::{set_default_ss58_version, Ss58AddressFormat};
-use sp_core::hexdisplay::HexDisplay;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use wallet::*;
 
 fn default_keystore_path() -> PathBuf {
@@ -63,7 +54,6 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let matches = app.clone().get_matches();
 
     let data_path = default_path();
-    // let store = WalletStore::init(data_path.as_path().to_str());
     // set_default_ss58_version(Ss58AddressFormat::PolkadotAccount);
 
     match matches.subcommand() {

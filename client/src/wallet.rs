@@ -1,17 +1,10 @@
 use rustbreak::{deser::Bincode, FileDatabase};
-use serde::{Deserialize, Serialize};
-use serde_json::json;
 
 use crate::crypto::*;
 use crate::keystore::Keystore;
 use crate::pkcs8;
 use crate::primitives::AccountId;
 use sp_core::{blake2_256, crypto::Ss58Codec, hexdisplay::HexDisplay, Decode, Encode};
-use std::fs;
-use std::path::PathBuf;
-use std::time::SystemTime;
-
-const DEFAULT_WALLET_NAME: &'static str = "multi-sig-wallet";
 
 pub fn get_keystore(path: String) -> Result<Keystore, Box<dyn std::error::Error>> {
     let k = Keystore::parse_from_file(path).map_err(|_err| "failed to get keystore from file")?;
