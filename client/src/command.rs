@@ -37,7 +37,6 @@ pub fn get_app<'a, 'b>() -> App<'a, 'b> {
                     "
                 <name>  'The name of keystore file'
                 <threshold>  'The threshold of multi signature account'
-                <seed>  'The seed of keystore'
                 <others>  'The other signer address of multi signature account'
           ",
                 ),

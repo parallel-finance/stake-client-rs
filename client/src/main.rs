@@ -100,7 +100,6 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         ("create", Some(matches)) => {
             let name = matches.value_of("name").unwrap();
             let threshold = matches.value_of("threshold").unwrap();
-            let seed = matches.value_of("seed").unwrap();
             let others = matches.value_of("others").unwrap();
             let mut split = others.split(",");
             let others_split: Vec<&str> = split.collect();
@@ -111,11 +110,17 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             }
 
             // create multi signature keystore
+            let mut seed: String = "".to_string();
+            if let Some(s) = rpassword::read_password_from_tty(Some("Input seed:")).ok() {
+                seed = s;
+            } else {
+                println!("invalid seed")
+            }
             let password = rpassword::read_password_from_tty(Some("Set password: ")).ok();
             let mut keystore = create_keystore(
                 password,
                 threshold.to_string().parse().unwrap(),
-                seed.to_string(),
+                seed,
                 other_addresses,
             )?;
 
@@ -124,7 +129,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             if let Err(e) = fs::write(file_name.clone(), keystore.to_json()) {
                 println!("failed to write to file: {:?}", e);
             } else {
-                println!("keystore file created:{}\n{:?}", file_name, keystore);
+                println!("keystore file created: {}\n{:?}", file_name, keystore);
             }
         }
 

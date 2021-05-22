@@ -20,7 +20,7 @@ pub fn get_keystore(path: String) -> Result<Keystore, Box<dyn std::error::Error>
 
 pub fn create_keystore(
     password: Option<String>,
-    threshold: u64,
+    threshold: u16,
     seed: String,
     others: Vec<String>,
 ) -> Result<Keystore, Box<dyn std::error::Error>> {
@@ -45,8 +45,7 @@ pub fn create_keystore(
     }
     let signatories = ensure_sorted_and_insert(other_signatories, pair.public().into())
         .map_err(|_err| "failed to sort signatories")?;
-    println!("{:?}", signatories);
-    let id = multi_account_id(&signatories, 1);
+    let id = multi_account_id(&signatories, threshold.clone());
 
     let k = Keystore {
         address: format!("{}", pair.public()),

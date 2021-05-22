@@ -16,7 +16,7 @@ pub struct Keystore {
     pub others: Vec<String>,
 
     // the threshold of multi-signature.
-    pub threshold: u64,
+    pub threshold: u16,
 
     // The network of keystore, for 'polkadot' or 'ksm'.
     pub network: String,
