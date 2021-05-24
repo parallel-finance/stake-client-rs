@@ -1,5 +1,5 @@
 pub mod balances;
+pub mod heiko_staking;
 pub mod multisig;
 pub mod staking;
-pub mod vanilla_oracle;
 use crate::error;
