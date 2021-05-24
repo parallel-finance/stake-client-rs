@@ -1,5 +1,5 @@
 use super::error::Error;
-use super::runtime::{CurrencyId, ParaRuntime};
+use super::runtime::{CurrencyId, HeikoRuntime};
 use super::vanilla_oracle::FeedValues;
 use sp_core::crypto::Pair as TraitPair;
 use sp_core::sr25519::Pair;

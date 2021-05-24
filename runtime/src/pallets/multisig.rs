@@ -4,15 +4,35 @@ use frame_support::{weights::Weight, Parameter};
 use sp_core::hashing::blake2_256;
 use sp_runtime::traits::Member;
 use substrate_subxt::system::System;
-use substrate_subxt::{Call, Client, Encoded, Runtime};
+use substrate_subxt::{balances::Balances, Call, Client, Encoded, Runtime};
 
 use sp_runtime::traits::Hash;
+
 #[derive(Copy, Clone, Eq, PartialEq, Encode, Decode, Default, Debug)]
 pub struct Timepoint<BlockNumber> {
     /// The height of the chain at the point in time.
-    height: BlockNumber,
+    pub height: BlockNumber,
     /// The index of the extrinsic at the point in time.
-    index: u32,
+    pub index: u32,
+}
+
+#[derive(Clone, Eq, PartialEq, Encode, Decode, Default, Debug)]
+pub struct MultisigData<BlockNumber, AccountId> {
+    /// The extrinsic when the multisig operation was opened.
+    pub when: Timepoint<BlockNumber>,
+    /// The amount held in reserve of the `depositor`, to be returned once the operation ends.
+    pub deposit: u128,
+    /// The account who opened it (i.e. the first to approve it).
+    pub depositor: AccountId,
+    /// The approvals achieved so far, including the depositor. Always sorted.
+    pub approvals: Vec<AccountId>,
+}
+
+#[derive(Encode, Copy, Clone, Debug, Hash, PartialEq, Eq, Ord, PartialOrd, Store)]
+pub struct MultisigsStore<T: Multisig> {
+    #[store(returns = Option<MultisigData<T::BlockNumber, T::AccountId>>)]
+    pub multisig_account: T::AccountId,
+    pub call_hash: [u8; 32],
 }
 
 impl<BlockNumber> Timepoint<BlockNumber> {
@@ -86,4 +106,15 @@ pub fn multisig_as_multi_call<T: Multisig + Runtime, C: Call<T> + Send + Sync>(
         store_call,
         max_weight,
     })
+}
+
+pub fn multisig_call_hash<T: Multisig + Runtime, C: Call<T> + Send + Sync>(
+    subxt_client: &Client<T>,
+    call: C,
+) -> Result<[u8; 32], Error> {
+    let call_encoded = subxt_client
+        .encode(call)
+        .map_err(|e| Error::SubxtError(e))?;
+    let call_hash = blake2_256(&call_encoded.encode());
+    Ok(call_hash)
 }

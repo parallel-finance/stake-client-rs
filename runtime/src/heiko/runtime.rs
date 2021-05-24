@@ -1,6 +1,6 @@
 use super::vanilla_oracle::VanillaOracle;
 use codec::{Decode, Encode};
-pub use substrate_subxt::NodeTemplateRuntime as ParaRuntime;
+pub use substrate_subxt::NodeTemplateRuntime as HeikoRuntime;
 
 use sp_runtime::FixedU128;
 pub type Price = FixedU128;
@@ -14,7 +14,7 @@ pub enum CurrencyId {
     Native,
 }
 
-impl VanillaOracle for ParaRuntime {
+impl VanillaOracle for HeikoRuntime {
     type OracleKey = CurrencyId;
     type OracleValue = Price;
 }
