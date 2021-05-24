@@ -1,6 +1,6 @@
-use codec::{Decode,Encode};
-pub use substrate_subxt::NodeTemplateRuntime as ParaRuntime;
 use super::vanilla_oracle::VanillaOracle;
+use codec::{Decode, Encode};
+pub use substrate_subxt::NodeTemplateRuntime as ParaRuntime;
 
 use sp_runtime::FixedU128;
 pub type Price = FixedU128;

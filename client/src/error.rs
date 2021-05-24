@@ -2,8 +2,8 @@ use thiserror::Error as ThisError;
 use toml::de::Error as TomlError;
 
 use core::fmt::Error as SerializeError;
-use std::io::Error as IoError;
 use db::error::Error as DbError;
+use std::io::Error as IoError;
 
 #[derive(ThisError, Debug)]
 pub enum Error {

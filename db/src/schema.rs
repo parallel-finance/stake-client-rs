@@ -18,7 +18,4 @@ table! {
 
 joinable!(withdraw_tx -> withdraw (idx));
 
-allow_tables_to_appear_in_same_query!(
-    withdraw,
-    withdraw_tx,
-);
+allow_tables_to_appear_in_same_query!(withdraw, withdraw_tx,);
