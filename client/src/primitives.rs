@@ -1,3 +1,4 @@
+use codec::{Decode, Encode};
 use sp_runtime::{
     traits::{IdentifyAccount, Verify},
     MultiSignature,
@@ -14,3 +15,17 @@ pub type AccountPublic = <Signature as Verify>::Signer;
 /// Alias to the opaque account ID type for this chain, actually a `AccountId32`. This is always
 /// 32 bytes.
 pub type AccountId = <AccountPublic as IdentifyAccount>::AccountId;
+
+/// The CurrencyId of para chain.
+#[derive(Encode, Decode, Debug, Eq, PartialEq, Copy, Clone, PartialOrd, Ord)]
+pub enum CurrencyId {
+    DOT = 0,
+    KSM = 1,
+    USDT = 2,
+    #[allow(non_camel_case_types)]
+    xDOT = 3,
+    Native = 4,
+}
+
+/// The minimum balance of pool to withdraw.
+pub const MIN_POOL_BALANCE: u128 = 100_000_000_000_000_000_000;

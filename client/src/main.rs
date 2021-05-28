@@ -3,41 +3,31 @@ mod config;
 mod crypto;
 mod error;
 mod keystore;
+mod listener;
 mod pkcs8;
 mod primitives;
+mod tasks;
 mod test;
 mod wallet;
 
+use async_std::task;
 use config::Config;
+use crypto::*;
 use db::executor::DbExecutor;
 use db::model::WithdrawTx;
 use db::schema::withdraw_tx::dsl::*;
 use lazy_static::lazy_static;
-use structopt::StructOpt;
-
-use crypto::*;
+use listener::listen_pool_balances;
 use primitives::AccountId;
+use primitives::CurrencyId;
 use std::fs;
 use std::path::PathBuf;
+use structopt::StructOpt;
+use tasks::{do_first_withdraw, do_last_withdraw, do_middle_withdraw};
 use wallet::*;
 
-fn default_keystore_path() -> PathBuf {
-    let mut path = dirs::home_dir().unwrap();
-    path.push("./");
-    if !path.exists() {
-        fs::create_dir_all(path.clone()).expect("Failed to create default data path");
-    }
-    path
-}
-
-fn default_path() -> PathBuf {
-    let mut path = dirs::home_dir().unwrap();
-    path.push(".stakewallet");
-    if !path.exists() {
-        fs::create_dir_all(path.clone()).expect("Failed to create default data path");
-    }
-    path
-}
+const DEFAULT_WS_SERVER: &str = "ws://127.0.0.1:9944";
+const DEFAULT_POOL_ADDR: &str = "5DjYJStmdZ2rcqXbXGX7TW85JsrW6uG4y9MUcLq2BoPMpRA7";
 
 lazy_static! {
     pub static ref CFG: Config =
@@ -48,31 +38,62 @@ lazy_static! {
     };
 }
 
+/// start withdraw task, ws_server: ws://127.0.0.1:9944
+pub(crate) async fn start_withdraw_task(mut ws_server: &str, mut pool_addr: &str) {
+    // let cmd = command::Cmd::from_args();
+    // let p = test::Parameters {
+    //     ws_server: cmd.ws_server,
+    //     key_store: cmd.key_store,
+    // };
+    //
+    // // let conn = DB.get_connection().unwrap();
+    // // withdraw_tx.load::<WithdrawTx>(&conn).unwrap();
+    //
+    // let _r = test::run(&p);
+
+    if ws_server == "" {
+        ws_server = DEFAULT_WS_SERVER;
+    }
+    if pool_addr == "" {
+        pool_addr = DEFAULT_POOL_ADDR;
+    }
+    loop {
+        // todo complete me
+        println!("start listen_pool_balances");
+        task::block_on(listen_pool_balances(
+            ws_server.clone(),
+            pool_addr.clone(),
+            CurrencyId::DOT,
+        ));
+
+        // todo get state from db
+        // let conn = DB.get_connection().unwrap();
+
+        // todo do withdraw, first? or second?
+        task::block_on(do_first_withdraw());
+        //task::block_on(do_middle_withdraw());
+        //task::block_on(do_last_withdraw());
+    }
+}
+
 #[async_std::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let mut app = command::get_app();
     let matches = app.clone().get_matches();
 
-    let data_path = default_path();
-    // set_default_ss58_version(Ss58AddressFormat::PolkadotAccount);
-
     match matches.subcommand() {
         ("start", Some(matches)) => {
-            let file = matches.value_of("file").unwrap();
             println!("start client ...");
-            let keystore = get_keystore(file.to_string());
+            let file = matches.value_of("file").unwrap();
+            let mut ws_server = matches.value_of("ws_server").unwrap();
+            let mut pool_addr = matches.value_of("pool_addr").unwrap();
+
+            let keystore = get_keystore(file.to_string()).unwrap();
             println!("{:?}", keystore);
 
-            let cmd = command::Cmd::from_args();
-            let p = test::Parameters {
-                ws_server: cmd.ws_server,
-                key_store: cmd.key_store,
-            };
-
-            // let conn = DB.get_connection().unwrap();
-            // withdraw_tx.load::<WithdrawTx>(&conn).unwrap();
-
-            let _r = test::run(&p);
+            let password = rpassword::read_password_from_tty(Some("Input password:")).ok();
+            let signer = keystore.into_pair::<Sr25519>(password).unwrap();
+            task::block_on(start_withdraw_task(ws_server, pool_addr));
         }
 
         ("getaddress", Some(_)) => {

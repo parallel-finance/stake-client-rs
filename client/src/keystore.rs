@@ -35,11 +35,6 @@ impl Keystore {
         serde_json::to_string(&self).unwrap()
     }
 
-    pub fn get_multi_address(&self) -> String {
-        // todo calculate multi signature address
-        "".to_string()
-    }
-
     pub fn encoded_bytes(&self) -> Vec<u8> {
         let encoded = if self.encoded.starts_with("0x") {
             &self.encoded[2..]
