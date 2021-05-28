@@ -205,14 +205,14 @@ pub async fn test_staking_pallet(
     signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
 ) -> Result<(), Error> {
     // 1 test stake
-    let call = heiko::api::staking_stake_call::<HeikoRuntime>(8_000_000_000_000u128);
+    let call = heiko::api::liquid_staking_stake_call::<HeikoRuntime>(8_000_000_000_000u128);
     let result = subxt_client.submit(call, signer).await.unwrap();
     println!("test_heiko_staking_stake hash {:?}", result);
 
     // 2 test withdraw
     task::sleep(Duration::from_millis(6000)).await;
     let dest = AccountKeyring::Eve.to_account_id().into();
-    let call = heiko::api::staking_withdraw_call::<HeikoRuntime>(dest, 500u128);
+    let call = heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(dest, 500u128);
 
     let call_encoded = subxt_client
         .encode(call)
@@ -227,7 +227,8 @@ pub async fn test_staking_pallet(
     // 3 test record rewards
     task::sleep(Duration::from_millis(6000)).await;
     let dest = AccountKeyring::Eve.to_account_id().into();
-    let call = heiko::api::staking_record_rewards_call::<HeikoRuntime>(dest, 111_000_000_000u128);
+    let call =
+        heiko::api::liquid_staking_record_rewards_call::<HeikoRuntime>(dest, 111_000_000_000u128);
 
     let call_encoded = subxt_client
         .encode(call)
