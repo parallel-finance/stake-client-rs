@@ -1,3 +1,4 @@
+use core::marker::PhantomData;
 use std::convert::TryFrom;
 
 use async_std::task;
@@ -14,7 +15,6 @@ use substrate_subxt::{
     balances, staking, sudo, Client, ClientBuilder, PairSigner, Runtime, Signer,
 };
 use substrate_subxt::{sp_runtime::traits::IdentifyAccount, Encoded};
-///SHOULD BE DELETE!!!
 
 //TODO 定义一个结构体接收参数，不依赖command
 #[derive(Debug)]
@@ -196,11 +196,11 @@ pub async fn run_parachain(cmd: &Parameters) -> Result<(), Error> {
         })?;
     let pair = Pair::from_string(&cmd.key_store, None).unwrap();
     let signer = PairSigner::<HeikoRuntime, Pair>::new(pair);
-    test_staking_pallet(&subxt_client, &signer).await?;
+    test_liquid_staking_pallet(&subxt_client, &signer).await?;
     Ok(())
 }
 
-pub async fn test_staking_pallet(
+pub async fn test_liquid_staking_pallet(
     subxt_client: &Client<HeikoRuntime>,
     signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
 ) -> Result<(), Error> {
@@ -208,6 +208,29 @@ pub async fn test_staking_pallet(
     let call = heiko::api::liquid_staking_stake_call::<HeikoRuntime>(8_000_000_000_000u128);
     let result = subxt_client.submit(call, signer).await.unwrap();
     println!("test_heiko_staking_stake hash {:?}", result);
+
+    // get backend store
+    let store = heiko::api::TotalStakingAssetStore::<HeikoRuntime> {
+        _runtime: PhantomData,
+    };
+    let r = subxt_client.fetch(&store, None).await?.unwrap();
+    println!("TotalStakingAssetStore {:?}", r);
+
+    let store = heiko::api::TotalVoucherStore::<HeikoRuntime> {
+        _runtime: PhantomData,
+    };
+    let r = subxt_client.fetch(&store, None).await?.unwrap();
+    println!("TotalVoucherStore {:?}", r);
+
+    let public =
+        sp_core::ed25519::Public::from_str("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY")
+            .unwrap();
+    let store = heiko::api::AccountsStore::<HeikoRuntime> {
+        account: public.into(),
+        currency_id: parallel_primitives::CurrencyId::DOT,
+    };
+    let r = subxt_client.fetch(&store, None).await?.unwrap();
+    println!("AccountsStore {:?}", r);
 
     // 2 test withdraw
     task::sleep(Duration::from_millis(6000)).await;
@@ -218,7 +241,7 @@ pub async fn test_staking_pallet(
         .encode(call)
         .map_err(|e| Error::SubxtError(e))?;
     let sc = sudo::SudoCall::<HeikoRuntime> {
-        _runtime: core::marker::PhantomData,
+        _runtime: PhantomData,
         call: &call_encoded,
     };
     let result = subxt_client.submit(sc, signer).await.unwrap();
@@ -234,7 +257,7 @@ pub async fn test_staking_pallet(
         .encode(call)
         .map_err(|e| Error::SubxtError(e))?;
     let sc = sudo::SudoCall::<HeikoRuntime> {
-        _runtime: core::marker::PhantomData,
+        _runtime: PhantomData,
         call: &call_encoded,
     };
     let result = subxt_client.submit(sc, signer).await.unwrap();

@@ -27,7 +27,8 @@ sp-core = "3.0.0"
 sp-keyring = "3.0.0"
 log = "0.4.0"
 thiserror   = "1.0.24"
-
+orml-tokens = { git = 'https://github.com/open-web3-stack/open-runtime-module-library.git', default-features = false }
+parallel-primitives = { package = 'parallel-primitives', git = 'https://github.com/parallel-finance/parallel' }
 [features]
 default = ["std"]
 std = [

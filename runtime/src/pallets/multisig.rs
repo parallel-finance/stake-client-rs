@@ -17,11 +17,11 @@ pub struct Timepoint<BlockNumber> {
 }
 
 #[derive(Clone, Eq, PartialEq, Encode, Decode, Default, Debug)]
-pub struct MultisigData<BlockNumber, AccountId> {
+pub struct MultisigData<BlockNumber, Balance, AccountId> {
     /// The extrinsic when the multisig operation was opened.
     pub when: Timepoint<BlockNumber>,
     /// The amount held in reserve of the `depositor`, to be returned once the operation ends.
-    pub deposit: u128,
+    pub deposit: Balance,
     /// The account who opened it (i.e. the first to approve it).
     pub depositor: AccountId,
     /// The approvals achieved so far, including the depositor. Always sorted.
@@ -30,7 +30,7 @@ pub struct MultisigData<BlockNumber, AccountId> {
 
 #[derive(Encode, Copy, Clone, Debug, Hash, PartialEq, Eq, Ord, PartialOrd, Store)]
 pub struct MultisigsStore<T: Multisig> {
-    #[store(returns = Option<MultisigData<T::BlockNumber, T::AccountId>>)]
+    #[store(returns = Option<MultisigData<T::BlockNumber,T::Balance, T::AccountId>>)]
     pub multisig_account: T::AccountId,
     pub call_hash: [u8; 32],
 }
@@ -42,7 +42,7 @@ impl<BlockNumber> Timepoint<BlockNumber> {
 }
 
 #[module]
-pub trait Multisig: System {}
+pub trait Multisig: Balances {}
 
 #[derive(Clone, Debug, PartialEq, Call, Encode, Default)]
 pub struct AsMultiCall<T: Multisig> {
