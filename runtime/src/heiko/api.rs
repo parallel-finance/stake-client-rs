@@ -1,3 +1,4 @@
+pub use super::balances::balances_transfer_call;
 pub use super::liquid_staking::{
     liquid_staking_finish_processed_unstake_call, liquid_staking_process_pending_unstake_call,
     liquid_staking_record_rewards_call, liquid_staking_record_slash_call,

@@ -15,9 +15,9 @@ pub(crate) async fn listen_pool_balances(
     pool_addr: &str,
     currency_id: CurrencyId,
 ) {
-    let mut api = Api::<sr25519::Pair>::new(ws_server.to_string()).unwrap();
+    let api = Api::<sr25519::Pair>::new(ws_server.to_string()).unwrap();
     loop {
-        let one_second = time::Duration::from_secs(1);
+        let one_second = time::Duration::from_secs(5);
         thread::sleep(one_second);
 
         let account_id = AccountId::from_string(pool_addr).unwrap();
@@ -47,7 +47,7 @@ pub(crate) async fn listen_pool_balances(
 
         println!("[+] Pool's {:?} amount is {:?}", currency_id, account_data);
 
-        if account_data.free > MIN_POOL_BALANCE {
+        if account_data.free >= MIN_POOL_BALANCE {
             println!(
                 "[+] need to withdraw, current amount {:?}: {:?}",
                 currency_id, account_data.free
@@ -55,4 +55,10 @@ pub(crate) async fn listen_pool_balances(
             break;
         }
     }
+}
+
+pub(crate) async fn wait_transfer_finished() {
+    // todo wait transfer
+    let one_second = time::Duration::from_secs(60);
+    thread::sleep(one_second);
 }

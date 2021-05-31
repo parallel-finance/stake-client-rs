@@ -28,4 +28,4 @@ pub enum CurrencyId {
 }
 
 /// The minimum balance of pool to withdraw.
-pub const MIN_POOL_BALANCE: u128 = 100_000_000_000_000_000_000;
+pub const MIN_POOL_BALANCE: u128 = 100_000_000_000_000;
