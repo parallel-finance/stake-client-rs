@@ -1,5 +1,6 @@
 use crate::crypto::*;
 use crate::pkcs8;
+use crate::primitives::{AccountId, MIN_POOL_BALANCE};
 use serde::{Deserialize, Serialize};
 use std::fs;
 
@@ -53,5 +54,15 @@ impl Keystore {
             Ok((_, secret_key)) => T::pair_from_seed_slice(&secret_key[..]),
             Err(_) => Err(()),
         }
+    }
+
+    pub fn get_other_signatories(&self) -> Result<Vec<AccountId>, ()> {
+        let mut other_signatories: Vec<AccountId> = vec![];
+        for a in self.others.iter() {
+            let account_id = AccountId::from_string(&a).map_err(|_err| ())?;
+            other_signatories.push(account_id);
+        }
+        other_signatories.sort_by(|a, b| a.cmp(&b));
+        Ok(other_signatories)
     }
 }

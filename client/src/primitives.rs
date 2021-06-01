@@ -16,16 +16,5 @@ pub type AccountPublic = <Signature as Verify>::Signer;
 /// 32 bytes.
 pub type AccountId = <AccountPublic as IdentifyAccount>::AccountId;
 
-/// The CurrencyId of para chain.
-#[derive(Encode, Decode, Debug, Eq, PartialEq, Copy, Clone, PartialOrd, Ord)]
-pub enum CurrencyId {
-    DOT = 0,
-    KSM = 1,
-    USDT = 2,
-    #[allow(non_camel_case_types)]
-    xDOT = 3,
-    Native = 4,
-}
-
 /// The minimum balance of pool to withdraw.
 pub const MIN_POOL_BALANCE: u128 = 100_000_000_000_000;

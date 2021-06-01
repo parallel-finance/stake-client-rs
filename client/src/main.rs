@@ -18,19 +18,15 @@ use db::executor::DbExecutor;
 use db::model::WithdrawTx;
 use db::schema::withdraw_tx::dsl::*;
 use lazy_static::lazy_static;
-use listener::{listen_pool_balances, wait_transfer_finished};
+use parallel_primitives::CurrencyId;
 use primitives::AccountId;
-use primitives::CurrencyId;
 use sp_core::crypto::Pair as TraitPair;
 use sp_core::sr25519::Pair;
 use std::fs;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use tasks::{do_first_withdraw, do_last_withdraw, do_middle_withdraw};
+use tasks::start_withdraw_task;
 use wallet::*;
-
-const DEFAULT_WS_SERVER: &str = "ws://127.0.0.1:9944";
-const DEFAULT_POOL_ADDR: &str = "5DjYJStmdZ2rcqXbXGX7TW85JsrW6uG4y9MUcLq2BoPMpRA7";
 
 lazy_static! {
     pub static ref CFG: Config =
@@ -41,60 +37,6 @@ lazy_static! {
     };
 }
 
-/// start withdraw task, ws_server: ws://127.0.0.1:9944
-pub(crate) async fn start_withdraw_task(
-    keystore: Keystore,
-    pair: Pair,
-    mut ws_server: &str,
-    mut pool_addr: &str,
-    first: bool, // temp use
-) {
-    // let cmd = command::Cmd::from_args();
-    // let p = test::Parameters {
-    //     ws_server: cmd.ws_server,
-    //     key_store: cmd.key_store,
-    // };
-    //
-    // // let conn = DB.get_connection().unwrap();
-    // // withdraw_tx.load::<WithdrawTx>(&conn).unwrap();
-    //
-    // let _r = test::run(&p);
-
-    if ws_server == "" {
-        ws_server = DEFAULT_WS_SERVER;
-    }
-    if pool_addr == "" {
-        pool_addr = DEFAULT_POOL_ADDR;
-    }
-    loop {
-        // todo complete me
-        println!("start listen_pool_balances");
-        task::block_on(listen_pool_balances(
-            ws_server.clone(),
-            pool_addr.clone(),
-            CurrencyId::KSM,
-        ));
-
-        // todo get state from db
-        // let conn = DB.get_connection().unwrap();
-
-        // todo do withdraw, first? or second?
-        if first {
-            task::block_on(do_first_withdraw(
-                keystore.clone(),
-                pair.clone(),
-                ws_server.clone(),
-                pool_addr.clone(),
-            ));
-            task::block_on(wait_transfer_finished())
-        } else {
-            task::block_on(do_last_withdraw());
-            task::block_on(wait_transfer_finished())
-        }
-        //task::block_on(do_middle_withdraw());
-    }
-}
-
 #[async_std::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let mut app = command::get_app();
@@ -102,24 +44,40 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     match matches.subcommand() {
         ("start", Some(matches)) => {
+            // let cmd = command::Cmd::from_args();
+            // let p = test::Parameters {
+            //     ws_server: cmd.ws_server,
+            //     key_store: cmd.key_store,
+            // };
+            //
+            // // let conn = DB.get_connection().unwrap();
+            // // withdraw_tx.load::<WithdrawTx>(&conn).unwrap();
+            //
+            // let _r = test::run(&p);
             println!("start client ...");
             let file = matches.value_of("file").unwrap();
             let ws_server = matches.value_of("ws_server").unwrap();
             let pool_addr = matches.value_of("pool_addr").unwrap();
             let first = matches.value_of("first").unwrap();
 
+            // get keystore
             let keystore = get_keystore(file.to_string()).unwrap();
             println!("{:?}", keystore);
 
+            // get pair
             let password = rpassword::read_password_from_tty(Some("Input password:")).ok();
-            let signer = keystore.into_pair::<Sr25519>(password).unwrap();
-            task::block_on(start_withdraw_task(
-                keystore,
-                signer,
+            let pair = keystore.into_pair::<Sr25519>(password).unwrap();
+
+            // get other signatories
+            let other_signatories = keystore.get_other_signatories().unwrap();
+            let r = start_withdraw_task(
+                pair,
+                other_signatories,
                 ws_server,
                 pool_addr,
                 first == "true",
-            ));
+            ).await;
+            println!("start_withdraw_task finished:{:?}", r);
         }
 
         ("getaddress", Some(_)) => {
