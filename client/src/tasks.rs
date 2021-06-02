@@ -8,11 +8,13 @@ use runtime::error::Error;
 use runtime::heiko::{self, runtime::HeikoRuntime};
 use runtime::kusama::{self, runtime::KusamaRuntime as RelayRuntime};
 use runtime::pallets::multisig::{ApproveAsMultiCall, AsMultiCall, Multisig, Timepoint};
-use sp_core::{crypto::Pair as TraitPair, crypto::Ss58Codec};
 use sp_core::sr25519::Pair;
+use sp_core::{crypto::Pair as TraitPair, crypto::Ss58Codec};
 use sp_keyring::AccountKeyring;
 use std::str::FromStr;
 use std::time::Duration;
+use std::{thread, time};
+use substrate_subxt::Error as SubError;
 use substrate_subxt::{
     balances, sp_runtime::traits::IdentifyAccount, staking, sudo, Client, ClientBuilder, Encoded,
     PairSigner, Runtime, Signer,
@@ -48,7 +50,8 @@ pub(crate) async fn start_withdraw_task(
             ws_server.clone(),
             pool_addr.clone(),
             CurrencyId::KSM,
-        ).await;
+        )
+        .await;
 
         // todo get state from db
         // let conn = DB.get_connection().unwrap();
@@ -61,7 +64,8 @@ pub(crate) async fn start_withdraw_task(
                 pool_addr.clone(),
                 &subxt_client,
                 &signer,
-            ).await;
+            )
+            .await;
             wait_transfer_finished().await;
         } else {
             let _ = do_last_withdraw(
@@ -70,7 +74,8 @@ pub(crate) async fn start_withdraw_task(
                 pool_addr.clone(),
                 &subxt_client,
                 &signer,
-            ).await;
+            )
+            .await;
             wait_transfer_finished().await;
         }
         //task::block_on(do_middle_withdraw());
@@ -99,7 +104,7 @@ pub(crate) async fn do_first_withdraw(
         balances::TransferCall<HeikoRuntime>,
     >(subxt_client, 2, others, None, call.clone(), 0u64)?;
     // 1.2 initial the multisg call
-    let result = subxt_client.submit(mc, signer).await.unwrap();
+    let result = subxt_client.submit(mc, signer).await?;
     println!("multisig_approve_as_multi_call hash {:?}", result);
     Ok(())
 }
@@ -122,15 +127,12 @@ pub(crate) async fn do_last_withdraw(
     println!("---------- start create multi-signature transaction ----------");
     // 1.1 construct balance transfer call
     // todo change blances_transfer to withdraw
-    let account_id = AccountId::from_string(pool_addr).unwrap();
+    let account_id = AccountId::from_string(pool_addr)
+        .map_err(|_| SubError::Other("invalid pool address".to_string()))?;
     let dest = AccountKeyring::Eve.to_account_id().into();
     let call = heiko::api::balances_transfer_call::<HeikoRuntime>(&dest, MIN_POOL_BALANCE);
     let call_hash = kusama::api::multisig_call_hash(subxt_client, call.clone())?;
-    let store = kusama::api::MultisigsStore::<HeikoRuntime> {
-        multisig_account: account_id,
-        call_hash: call_hash,
-    };
-    let kusama::api::MultisigData { when, .. } = subxt_client.fetch(&store, None).await?.unwrap();
+    let when = get_last_withdraw_time_point(subxt_client, account_id, call_hash).await?;
     println!("multisig timepoint{:?}", when);
 
     let mc =
@@ -144,7 +146,28 @@ pub(crate) async fn do_last_withdraw(
             1_000_000_000_000,
         )?;
     // 1.2 initial the multisg call
-    let result = subxt_client.submit(mc, signer).await.unwrap();
+    let result = subxt_client.submit(mc, signer).await?;
     println!("multisig_as_multi_call hash {:?}", result);
     Ok(())
+}
+
+pub(crate) async fn get_last_withdraw_time_point(
+    subxt_client: &Client<HeikoRuntime>,
+    account_id: AccountId,
+    call_hash: [u8; 32],
+) -> Result<Timepoint<u32>, Error> {
+    loop {
+        println!("get time point, waiting...");
+        let store = kusama::api::MultisigsStore::<HeikoRuntime> {
+            multisig_account: account_id.clone(),
+            call_hash: call_hash.clone(),
+        };
+        if let Some(kusama::api::MultisigData { when, .. }) =
+            subxt_client.fetch(&store, None).await?
+        {
+            return Ok(when);
+        }
+        let times = time::Duration::from_secs(1);
+        thread::sleep(times);
+    }
 }

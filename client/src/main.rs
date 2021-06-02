@@ -76,7 +76,8 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 ws_server,
                 pool_addr,
                 first == "true",
-            ).await;
+            )
+            .await;
             println!("start_withdraw_task finished:{:?}", r);
         }
 
