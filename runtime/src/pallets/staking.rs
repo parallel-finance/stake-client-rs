@@ -1,3 +1,4 @@
+pub use substrate_subxt::staking::BondedStore;
 use substrate_subxt::staking::{BondCall, NominateCall, RewardDestination, Staking};
 
 pub fn staking_bond_call<'a, T: Staking>(

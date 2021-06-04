@@ -44,5 +44,16 @@ pub fn get_app<'a, 'b>() -> App<'a, 'b> {
                 <others>  'The other signer address of multi signature account'
           ",
                 ),
+            SubCommand::with_name("startrelay")
+                .about("Start relay client")
+                .args_from_usage(
+                    "
+            <file>  'The keystore filename with path'
+            <relay_ws_server>  'The relay ws server url'
+            <para_ws_server>  'The para ws server url'
+            <relay_pool_addr>  'The address of pool in relay chain'
+            <first>  'temp use, first to create withdraw transaction'
+            ",
+                ),
         ])
 }

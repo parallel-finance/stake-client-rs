@@ -3,6 +3,7 @@ mod config;
 mod crypto;
 mod error;
 mod keystore;
+mod kusama;
 mod listener;
 mod pkcs8;
 mod primitives;
@@ -18,6 +19,7 @@ use db::executor::DbExecutor;
 use db::model::WithdrawTx;
 use db::schema::withdraw_tx::dsl::*;
 use lazy_static::lazy_static;
+use log::{info, warn};
 use parallel_primitives::CurrencyId;
 use primitives::AccountId;
 use sp_core::crypto::Pair as TraitPair;
@@ -27,7 +29,6 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use tasks::start_withdraw_task;
 use wallet::*;
-
 lazy_static! {
     pub static ref CFG: Config =
         { Config::from_file("Config.toml").unwrap_or_else(|_| std::process::exit(1)) };
@@ -39,6 +40,7 @@ lazy_static! {
 
 #[async_std::main]
 async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    env_logger::init();
     let mut app = command::get_app();
     let matches = app.clone().get_matches();
 
@@ -79,6 +81,46 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             )
             .await;
             println!("start_withdraw_task finished:{:?}", r);
+        }
+
+        ("startrelay", Some(matches)) => {
+            info!("start relaychain client ...");
+            let file = matches.value_of("file").unwrap();
+            let relay_ws_server = matches
+                .value_of("relay_ws_server")
+                .unwrap_or_else(|| "ws://127.0.0.1:19944");
+            let para_ws_server = matches
+                .value_of("para_ws_server")
+                .unwrap_or_else(|| "ws://127.0.0.1:19844");
+            let relay_pool_addr = matches
+                .value_of("relay_pool_addr")
+                .unwrap_or_else(|| "5DjYJStmdZ2rcqXbXGX7TW85JsrW6uG4y9MUcLq2BoPMpRA7");
+            let first = matches.value_of("first").unwrap();
+
+            // get keystore
+            let keystore = get_keystore(file.to_string()).unwrap();
+            warn!("{:?}", keystore);
+
+            // get pair
+            let password = rpassword::read_password_from_tty(Some("Input password:")).ok();
+            let pair = keystore.into_pair::<Sr25519>(password).unwrap();
+
+            // get other signatories
+            let other_signatories = keystore.get_other_signatories().unwrap();
+
+            let temporary_cmd = kusama::TemporaryCmd {
+                relay_ws_server: relay_ws_server.to_string(),
+                para_ws_server: para_ws_server.to_string(),
+                relay_key_pair: pair.clone(),
+                para_key_pair: pair.clone(),
+                relay_pool_addr: relay_pool_addr.to_string(),
+                para_pool_addr: "NULL".to_string(),
+                relay_multi_other_signatories: other_signatories.clone(),
+                para_multi_other_signatories: other_signatories.clone(),
+                first: first == "true",
+            };
+            kusama::run(&temporary_cmd).await?;
+            info!("relaychain client finished");
         }
 
         ("getaddress", Some(_)) => {
