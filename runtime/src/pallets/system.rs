@@ -6,7 +6,7 @@ use substrate_subxt::system::System as SubxtSystem;
 
 #[derive(Encode, Copy, Clone, Debug, Hash, PartialEq, Eq, Ord, PartialOrd, Store)]
 pub struct AccountStore<T: System> {
-    #[store(returns =AccountInfo<T::Index, T::Balance>)]
+    #[store(returns =AccountInfo<T::Index, T::AccountData>)]
     pub account: T::AccountId,
 }
 

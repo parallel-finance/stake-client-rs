@@ -1,5 +1,5 @@
 [postgres]
 db       = "staking"
-host     = "127.0.0.1:5432"
-password = ""
-username = ""
+host     = "34.134.141.35:7921"
+password = "xUkLjqwSneqEU96NRxzf7HtJ"
+username = "parallel"

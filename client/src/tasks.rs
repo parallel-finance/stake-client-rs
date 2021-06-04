@@ -1,8 +1,16 @@
-use crate::listener::{listen_pool_balances, wait_transfer_finished};
+use crate::listener::listen_pool_balances;
 use crate::primitives::{AccountId, MIN_POOL_BALANCE};
 
+use crate::DB;
 use async_std::task;
 use core::marker::PhantomData;
+use db::executor::DbExecutor;
+use db::model::WithdrawTx;
+use db::schema::withdraw_tx::dsl::*;
+use diesel::{
+    self, query_dsl::BelongingToDsl, BoolExpressionMethods, Connection, ExpressionMethods,
+    QueryDsl, RunQueryDsl,
+};
 use parallel_primitives::CurrencyId;
 use runtime::error::Error;
 use runtime::heiko::{self, runtime::HeikoRuntime};
@@ -55,28 +63,33 @@ pub(crate) async fn start_withdraw_task(
 
         // todo get state from db
         // let conn = DB.get_connection().unwrap();
+        // let rr = withdraw_tx.load::<WithdrawTx>(&conn).unwrap();
+
+        // conn.
 
         let signer = PairSigner::<HeikoRuntime, Pair>::new(pair.clone());
         if first {
-            let _ = do_first_withdraw(
+            let (account_id, call_hash) = do_first_withdraw(
                 others.clone(),
                 ws_server.clone(),
                 pool_addr.clone(),
                 &subxt_client,
                 &signer,
             )
-            .await;
-            wait_transfer_finished().await;
+            .await?;
+            let _ = wait_transfer_finished(&subxt_client, account_id, call_hash).await?;
+            // todo wait transfer finished and update db
         } else {
-            let _ = do_last_withdraw(
+            let (account_id, call_hash) = do_last_withdraw(
                 others.clone(),
                 ws_server.clone(),
                 pool_addr.clone(),
                 &subxt_client,
                 &signer,
             )
-            .await;
-            wait_transfer_finished().await;
+            .await?;
+            let _ = wait_transfer_finished(&subxt_client, account_id, call_hash).await?;
+            // todo wait transfer finished and update db
         }
         //task::block_on(do_middle_withdraw());
     }
@@ -91,7 +104,7 @@ pub(crate) async fn do_first_withdraw(
     pool_addr: &str,
     subxt_client: &Client<HeikoRuntime>,
     signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
-) -> Result<(), Error> {
+) -> Result<(AccountId, [u8; 32]), Error> {
     println!("do_first_withdraw");
 
     println!("---------- start create multi-signature transaction ----------");
@@ -106,7 +119,12 @@ pub(crate) async fn do_first_withdraw(
     // 1.2 initial the multisg call
     let result = subxt_client.submit(mc, signer).await?;
     println!("multisig_approve_as_multi_call hash {:?}", result);
-    Ok(())
+
+    // get account_id of pool
+    let account_id = AccountId::from_string(pool_addr)
+        .map_err(|_| SubError::Other("invalid pool address".to_string()))?;
+    let call_hash = kusama::api::multisig_call_hash(subxt_client, call.clone())?;
+    Ok((account_id, call_hash))
 }
 
 /// If the wallet is the middle one to call withdraw, need to get 'TimePoint' and call 'approve_as_multi'.
@@ -122,7 +140,7 @@ pub(crate) async fn do_last_withdraw(
     pool_addr: &str,
     subxt_client: &Client<HeikoRuntime>,
     signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
-) -> Result<(), Error> {
+) -> Result<(AccountId, [u8; 32]), Error> {
     println!("do_last_withdraw");
     println!("---------- start create multi-signature transaction ----------");
     // 1.1 construct balance transfer call
@@ -132,7 +150,7 @@ pub(crate) async fn do_last_withdraw(
     let dest = AccountKeyring::Eve.to_account_id().into();
     let call = heiko::api::balances_transfer_call::<HeikoRuntime>(&dest, MIN_POOL_BALANCE);
     let call_hash = kusama::api::multisig_call_hash(subxt_client, call.clone())?;
-    let when = get_last_withdraw_time_point(subxt_client, account_id, call_hash).await?;
+    let when = get_last_withdraw_time_point(subxt_client, account_id.clone(), call_hash).await?;
     println!("multisig timepoint{:?}", when);
 
     let mc =
@@ -148,7 +166,7 @@ pub(crate) async fn do_last_withdraw(
     // 1.2 initial the multisg call
     let result = subxt_client.submit(mc, signer).await?;
     println!("multisig_as_multi_call hash {:?}", result);
-    Ok(())
+    Ok((account_id, call_hash))
 }
 
 pub(crate) async fn get_last_withdraw_time_point(
@@ -167,7 +185,31 @@ pub(crate) async fn get_last_withdraw_time_point(
         {
             return Ok(when);
         }
-        let times = time::Duration::from_secs(1);
-        thread::sleep(times);
+        thread::sleep(time::Duration::from_secs(1));
+    }
+}
+
+pub(crate) async fn wait_transfer_finished(
+    subxt_client: &Client<HeikoRuntime>,
+    account_id: AccountId,
+    call_hash: [u8; 32],
+) -> Result<(), Error> {
+    // todo check if the transaction is in block
+    println!("transferring, waiting...");
+    thread::sleep(time::Duration::from_secs(20));
+
+    loop {
+        let store = kusama::api::MultisigsStore::<HeikoRuntime> {
+            multisig_account: account_id.clone(),
+            call_hash: call_hash.clone(),
+        };
+        if let Some(kusama::api::MultisigData { when: _, .. }) =
+            subxt_client.fetch(&store, None).await?
+        {
+            let times = time::Duration::from_secs(5);
+            thread::sleep(times);
+        } else {
+            break Ok(());
+        }
     }
 }

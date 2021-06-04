@@ -35,23 +35,17 @@ pub(crate) async fn listen_pool_balances(
         thread::sleep(times);
 
         if let Some(account_info) = r {
-            println!("[+] Pool's {:?} amount is {:?}", currency_id, account_info);
-            if account_info.data >= MIN_POOL_BALANCE {
+            let balance = account_info.data.free - account_info.data.misc_frozen;
+            if balance >= MIN_POOL_BALANCE {
                 println!(
-                    "[+] need to withdraw, current amount {:?}: {:?}",
-                    currency_id, account_info.data
+                    "[+] Pool's {:?} amount is {:?}， need to withdraw",
+                    currency_id, account_info.data.free
                 );
-                amount = account_info.data;
+                amount = balance;
                 break;
             }
         }
     }
 
     Ok(amount)
-}
-
-pub(crate) async fn wait_transfer_finished() {
-    // todo wait transfer
-    let one_second = time::Duration::from_secs(60);
-    thread::sleep(one_second);
 }
