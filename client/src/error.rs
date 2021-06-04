@@ -4,6 +4,7 @@ use toml::de::Error as TomlError;
 use core::fmt::Error as SerializeError;
 use db::error::Error as DbError;
 use std::io::Error as IoError;
+use substrate_subxt::Error as SubxtError;
 
 #[derive(ThisError, Debug)]
 pub enum Error {
@@ -15,6 +16,8 @@ pub enum Error {
     SerializeError(#[from] SerializeError),
     #[error("DB Error: `{0:?}`")]
     DbError(#[from] DbError),
+    #[error("Substrate Subxt Error: `{0:?}`")]
+    SubxtError(#[from] SubxtError),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
