@@ -3,41 +3,30 @@ mod config;
 mod crypto;
 mod error;
 mod keystore;
+mod listener;
 mod pkcs8;
 mod primitives;
+mod tasks;
 mod test;
 mod wallet;
 
+use crate::keystore::Keystore;
+use async_std::task;
 use config::Config;
+use crypto::*;
 use db::executor::DbExecutor;
 use db::model::WithdrawTx;
 use db::schema::withdraw_tx::dsl::*;
 use lazy_static::lazy_static;
-use structopt::StructOpt;
-
-use crypto::*;
+use parallel_primitives::CurrencyId;
 use primitives::AccountId;
+use sp_core::crypto::Pair as TraitPair;
+use sp_core::sr25519::Pair;
 use std::fs;
 use std::path::PathBuf;
+use structopt::StructOpt;
+use tasks::start_withdraw_task;
 use wallet::*;
-
-fn default_keystore_path() -> PathBuf {
-    let mut path = dirs::home_dir().unwrap();
-    path.push("./");
-    if !path.exists() {
-        fs::create_dir_all(path.clone()).expect("Failed to create default data path");
-    }
-    path
-}
-
-fn default_path() -> PathBuf {
-    let mut path = dirs::home_dir().unwrap();
-    path.push(".stakewallet");
-    if !path.exists() {
-        fs::create_dir_all(path.clone()).expect("Failed to create default data path");
-    }
-    path
-}
 
 lazy_static! {
     pub static ref CFG: Config =
@@ -53,26 +42,43 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let mut app = command::get_app();
     let matches = app.clone().get_matches();
 
-    let data_path = default_path();
-    // set_default_ss58_version(Ss58AddressFormat::PolkadotAccount);
-
     match matches.subcommand() {
         ("start", Some(matches)) => {
-            let file = matches.value_of("file").unwrap();
+            // let cmd = command::Cmd::from_args();
+            // let p = test::Parameters {
+            //     ws_server: cmd.ws_server,
+            //     key_store: cmd.key_store,
+            // };
+            //
+            // // let conn = DB.get_connection().unwrap();
+            // // withdraw_tx.load::<WithdrawTx>(&conn).unwrap();
+            //
+            // let _r = test::run(&p);
             println!("start client ...");
-            let keystore = get_keystore(file.to_string());
+            let file = matches.value_of("file").unwrap();
+            let ws_server = matches.value_of("ws_server").unwrap();
+            let pool_addr = matches.value_of("pool_addr").unwrap();
+            let first = matches.value_of("first").unwrap();
+
+            // get keystore
+            let keystore = get_keystore(file.to_string()).unwrap();
             println!("{:?}", keystore);
 
-            let cmd = command::Cmd::from_args();
-            let p = test::Parameters {
-                ws_server: cmd.ws_server,
-                key_store: cmd.key_store,
-            };
+            // get pair
+            let password = rpassword::read_password_from_tty(Some("Input password:")).ok();
+            let pair = keystore.into_pair::<Sr25519>(password).unwrap();
 
-            // let conn = DB.get_connection().unwrap();
-            // withdraw_tx.load::<WithdrawTx>(&conn).unwrap();
-
-            let _r = test::run(&p);
+            // get other signatories
+            let other_signatories = keystore.get_other_signatories().unwrap();
+            let r = start_withdraw_task(
+                pair,
+                other_signatories,
+                ws_server,
+                pool_addr,
+                first == "true",
+            )
+            .await;
+            println!("start_withdraw_task finished:{:?}", r);
         }
 
         ("getaddress", Some(_)) => {
@@ -91,7 +97,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let name = matches.value_of("name").unwrap();
             let threshold = matches.value_of("threshold").unwrap();
             let others = matches.value_of("others").unwrap();
-            let mut split = others.split(",");
+            let split = others.split(",");
             let others_split: Vec<&str> = split.collect();
             let mut other_addresses = vec![];
             for a in others_split.iter() {
@@ -107,7 +113,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 println!("invalid seed")
             }
             let password = rpassword::read_password_from_tty(Some("Set password: ")).ok();
-            let mut keystore = create_keystore(
+            let keystore = create_keystore(
                 password,
                 threshold.to_string().parse().unwrap(),
                 seed,

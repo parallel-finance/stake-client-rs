@@ -1,3 +1,4 @@
+use codec::{Decode, Encode};
 use sp_runtime::{
     traits::{IdentifyAccount, Verify},
     MultiSignature,
@@ -14,3 +15,6 @@ pub type AccountPublic = <Signature as Verify>::Signer;
 /// Alias to the opaque account ID type for this chain, actually a `AccountId32`. This is always
 /// 32 bytes.
 pub type AccountId = <AccountPublic as IdentifyAccount>::AccountId;
+
+/// The minimum balance of pool to withdraw.
+pub const MIN_POOL_BALANCE: u128 = 100_000_000_000_000;
