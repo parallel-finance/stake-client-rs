@@ -1,20 +1,15 @@
-use core::marker::PhantomData;
-use std::convert::TryFrom;
-
 use async_std::task;
+use core::marker::PhantomData;
 use runtime::error::Error;
 use runtime::heiko::{self, runtime::HeikoRuntime};
 use runtime::kusama::{self, runtime::KusamaRuntime as RelayRuntime};
-use runtime::pallets::multisig::{ApproveAsMultiCall, AsMultiCall, Multisig, Timepoint};
+use runtime::pallets::multisig::Timepoint;
 use sp_core::crypto::Pair as TraitPair;
 use sp_core::sr25519::Pair;
 use sp_keyring::AccountKeyring;
 use std::str::FromStr;
 use std::time::Duration;
-use substrate_subxt::{
-    balances, staking, sudo, Client, ClientBuilder, PairSigner, Runtime, Signer,
-};
-use substrate_subxt::{sp_runtime::traits::IdentifyAccount, Encoded};
+use substrate_subxt::{balances, staking, sudo, Client, ClientBuilder, PairSigner, Signer};
 
 //TODO 定义一个结构体接收参数，不依赖command
 #[derive(Debug)]

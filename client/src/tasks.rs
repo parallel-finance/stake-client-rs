@@ -2,41 +2,34 @@ use crate::listener::listen_pool_balances;
 use crate::primitives::{AccountId, MIN_POOL_BALANCE};
 
 use crate::DB;
-use async_std::task;
-use core::marker::PhantomData;
 use db::executor::DbExecutor;
-use db::model::WithdrawTx;
+use db::model::{Withdraw, WithdrawTx};
 use db::schema::withdraw_tx::dsl::*;
 use diesel::{
     self, query_dsl::BelongingToDsl, BoolExpressionMethods, Connection, ExpressionMethods,
     QueryDsl, RunQueryDsl,
 };
-use parallel_primitives::CurrencyId;
+
 use runtime::error::Error;
 use runtime::heiko::{self, runtime::HeikoRuntime};
-use runtime::kusama::{self, runtime::KusamaRuntime as RelayRuntime};
-use runtime::pallets::multisig::{ApproveAsMultiCall, AsMultiCall, Multisig, Timepoint};
+use runtime::kusama::{self};
+use runtime::pallets::multisig::Timepoint;
+use sp_core::crypto::Ss58Codec;
 use sp_core::sr25519::Pair;
-use sp_core::{crypto::Pair as TraitPair, crypto::Ss58Codec};
 use sp_keyring::AccountKeyring;
-use std::str::FromStr;
-use std::time::Duration;
 use std::{thread, time};
 use substrate_subxt::Error as SubError;
-use substrate_subxt::{
-    balances, sp_runtime::traits::IdentifyAccount, staking, sudo, Client, ClientBuilder, Encoded,
-    PairSigner, Runtime, Signer,
-};
+use substrate_subxt::{balances, Client, ClientBuilder, PairSigner, Signer};
 
-const DEFAULT_WS_SERVER: &str = "ws://127.0.0.1:9944";
-const DEFAULT_POOL_ADDR: &str = "5DjYJStmdZ2rcqXbXGX7TW85JsrW6uG4y9MUcLq2BoPMpRA7";
+// const DEFAULT_WS_SERVER: &str = "ws://127.0.0.1:9944";
+// const DEFAULT_POOL_ADDR: &str = "5DjYJStmdZ2rcqXbXGX7TW85JsrW6uG4y9MUcLq2BoPMpRA7";
 
 /// start withdraw task, ws_server: ws://127.0.0.1:9944
 pub(crate) async fn start_withdraw_task(
     pair: Pair,
     others: Vec<AccountId>,
-    mut ws_server: &str,
-    mut pool_addr: &str,
+    ws_server: &str,
+    pool_addr: &str,
     first: bool, // temp use
 ) -> Result<(), Error> {
     // initialize heiko related api
@@ -53,54 +46,35 @@ pub(crate) async fn start_withdraw_task(
     loop {
         // todo complete me
         println!("start listen_pool_balances");
-        let _ = listen_pool_balances(
-            subxt_client.clone(),
-            ws_server.clone(),
-            pool_addr.clone(),
-            CurrencyId::KSM,
-        )
-        .await;
+        let _ =
+            listen_pool_balances(subxt_client.clone(), ws_server.clone(), pool_addr.clone()).await;
 
         // todo get state from db
         // let conn = DB.get_connection().unwrap();
-        // let rr = withdraw_tx.load::<WithdrawTx>(&conn).unwrap();
+        // let r = withdraw_tx.load::<Withdraw>(&conn).unwrap();
 
         // conn.
 
         let signer = PairSigner::<HeikoRuntime, Pair>::new(pair.clone());
         if first {
-            let (account_id, call_hash) = do_first_withdraw(
-                others.clone(),
-                ws_server.clone(),
-                pool_addr.clone(),
-                &subxt_client,
-                &signer,
-            )
-            .await?;
+            let (account_id, call_hash) =
+                do_first_withdraw(others.clone(), pool_addr.clone(), &subxt_client, &signer)
+                    .await?;
             let _ = wait_transfer_finished(&subxt_client, account_id, call_hash).await?;
             // todo wait transfer finished and update db
         } else {
-            let (account_id, call_hash) = do_last_withdraw(
-                others.clone(),
-                ws_server.clone(),
-                pool_addr.clone(),
-                &subxt_client,
-                &signer,
-            )
-            .await?;
+            let (account_id, call_hash) =
+                do_last_withdraw(others.clone(), pool_addr.clone(), &subxt_client, &signer).await?;
             let _ = wait_transfer_finished(&subxt_client, account_id, call_hash).await?;
             // todo wait transfer finished and update db
         }
         //task::block_on(do_middle_withdraw());
     }
-
-    Ok(())
 }
 
 /// The first wallet to call withdraw. No need use 'TimePoint' and call 'approve_as_multi'.
 pub(crate) async fn do_first_withdraw(
     others: Vec<AccountId>,
-    ws_server: &str,
     pool_addr: &str,
     subxt_client: &Client<HeikoRuntime>,
     signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
@@ -128,15 +102,14 @@ pub(crate) async fn do_first_withdraw(
 }
 
 /// If the wallet is the middle one to call withdraw, need to get 'TimePoint' and call 'approve_as_multi'.
-pub(crate) async fn do_middle_withdraw() -> Result<(), Error> {
-    println!("do_middle_withdraw");
-    Ok(())
-}
+// pub(crate) async fn do_middle_withdraw() -> Result<(), Error> {
+//     println!("do_middle_withdraw");
+//     Ok(())
+// }
 
 /// If the wallet is the last one need to get 'TimePoint' and call 'as_multi'.
 pub(crate) async fn do_last_withdraw(
     others: Vec<AccountId>,
-    ws_server: &str,
     pool_addr: &str,
     subxt_client: &Client<HeikoRuntime>,
     signer: &(dyn Signer<HeikoRuntime> + Send + Sync),

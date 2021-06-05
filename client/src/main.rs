@@ -11,22 +11,13 @@ mod tasks;
 mod test;
 mod wallet;
 
-use crate::keystore::Keystore;
-use async_std::task;
 use config::Config;
 use crypto::*;
 use db::executor::DbExecutor;
-use db::model::WithdrawTx;
-use db::schema::withdraw_tx::dsl::*;
 use lazy_static::lazy_static;
 use log::{info, warn};
-use parallel_primitives::CurrencyId;
 use primitives::AccountId;
-use sp_core::crypto::Pair as TraitPair;
-use sp_core::sr25519::Pair;
 use std::fs;
-use std::path::PathBuf;
-use structopt::StructOpt;
 use tasks::start_withdraw_task;
 use wallet::*;
 lazy_static! {
@@ -131,7 +122,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             println!("todo multi addr");
         }
 
-        ("show", Some(matches)) => {
+        ("show", Some(_)) => {
             println!("todo show");
         }
 

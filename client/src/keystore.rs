@@ -1,6 +1,6 @@
 use crate::crypto::*;
 use crate::pkcs8;
-use crate::primitives::{AccountId, MIN_POOL_BALANCE};
+use crate::primitives::AccountId;
 use serde::{Deserialize, Serialize};
 use std::fs;
 

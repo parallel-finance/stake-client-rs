@@ -1,4 +1,4 @@
-use clap::{App, Arg, SubCommand};
+use clap::{App, SubCommand};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]

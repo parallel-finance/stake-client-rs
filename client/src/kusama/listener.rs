@@ -1,25 +1,19 @@
 use super::kusama;
-use super::Error;
 use super::KusamaRuntime;
 use super::TasksType;
 use super::LISTEN_INTERVAL;
 use super::MIN_POOL_BALANCE;
 use async_std::task;
-use frame_system::AccountInfo;
 use futures::join;
 use log::{debug, error, info};
 use sp_utils::mpsc::TracingUnboundedSender;
 use std::str::FromStr;
 use std::time::Duration;
-use substrate_subxt::{
-    balances::{AccountData, Balances},
-    system::System,
-    Client,
-};
+use substrate_subxt::{system::System, Client};
 
 pub async fn listener(
     subxt_relay_client: &Client<KusamaRuntime>,
-    mut system_rpc_tx: TracingUnboundedSender<TasksType>,
+    system_rpc_tx: TracingUnboundedSender<TasksType>,
     pool_addr: String,
 ) {
     // start future-1 listening relaychain multisig-account balance
