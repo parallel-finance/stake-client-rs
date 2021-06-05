@@ -64,7 +64,6 @@ async fn relay_bond(
     pool_addr: String,
     first: bool,
 ) {
-    //TODO
     info!("relay_bond");
     if first {
         let _ = transaction::do_first_relay_bond(others.clone(), &subxt_relay_client, relay_signer)

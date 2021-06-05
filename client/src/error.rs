@@ -5,6 +5,7 @@ use core::fmt::Error as SerializeError;
 use db::error::Error as DbError;
 use std::io::Error as IoError;
 use substrate_subxt::Error as SubxtError;
+use runtime::error::Error as ClientRuntimeError;
 
 #[derive(ThisError, Debug)]
 pub enum Error {
@@ -18,6 +19,8 @@ pub enum Error {
     DbError(#[from] DbError),
     #[error("Substrate Subxt Error: `{0:?}`")]
     SubxtError(#[from] SubxtError),
+    #[error("Substrate Subxt Error: `{0:?}`")]
+    ClientRuntimeError(#[from] ClientRuntimeError),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

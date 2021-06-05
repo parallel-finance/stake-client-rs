@@ -1,8 +1,10 @@
 use super::AccountId;
 use super::Error;
 use super::KusamaRuntime;
-use log::info;
-use substrate_subxt::{Client, Signer};
+use super::MIN_POOL_BALANCE;
+use log::{error, info, warn};
+use sp_keyring::AccountKeyring;
+use substrate_subxt::{Client, Signer,staking};
 /// The first wallet to call withdraw. No need use 'TimePoint' and call 'approve_as_multi'.
 pub(crate) async fn do_first_relay_bond(
     others: Vec<AccountId>,
@@ -11,27 +13,27 @@ pub(crate) async fn do_first_relay_bond(
 ) -> Result<(), Error> {
     info!("do_first_relay_bond");
     // 1.1 construct staking bond call
-    // let ctrl = AccountKeyring::Eve.to_account_id().into();
-    // let call = kusama::api::staking_bond_call::<KusamaRuntime>(
-    //     &ctrl,
-    //     MIN_POOL_BALANCE,
-    //     staking::RewardDestination::Staked,
-    // );
-    // let mc = kusama::api::multisig_approve_as_multi_call::<
-    //     KusamaRuntime,
-    //     staking::BondCall<KusamaRuntime>,
-    // >(
-    //     subxt_client,
-    //     2,
-    //     others,
-    //     None,
-    //     call,
-    //     0u64,
-    // )?;
-    // // 1.2 initial the multisg call
-    // //TODO submit and watch
-    // let result = subxt_client.submit(mc, signer).await?;
-    // println!("multisig_approve_as_multi_call hash {:?}", result);
+    //TODO change to controller address, change the payee type
+    let ctrl = AccountKeyring::Eve.to_account_id().into();
+    let call = kusama::api::staking_bond_call::<KusamaRuntime>(
+        &ctrl,
+        MIN_POOL_BALANCE,
+        staking::RewardDestination::Staked,
+    );
+    let mc = kusama::api::multisig_approve_as_multi_call::<
+        KusamaRuntime,
+        staking::BondCall<KusamaRuntime>,
+    >(
+        subxt_client,
+        2,
+        others,
+        None,
+        call,
+        0u64,
+    ).map_err(|e| Error::ClientRuntimeError(e))?;;
+    // 1.2 initial the multisg call
+    let result = subxt_client.watch(mc, signer).await?;
+    info!("multisig_approve_as_multi_call hash {:?}", result);
     Ok(())
 }
 
