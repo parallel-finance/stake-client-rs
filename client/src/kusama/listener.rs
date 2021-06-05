@@ -44,10 +44,10 @@ async fn listen_balance(
         stash: account_id.clone(),
     };
 
-    let bond_controller: Option<<KusamaRuntime as System>::AccountId> =
-        subxt_relay_client.fetch(&bond, None).await.unwrap();
-    info!("bond_controller: {:?}", &bond_controller);
     loop {
+        let bond_controller: Option<<KusamaRuntime as System>::AccountId> =
+            subxt_relay_client.fetch(&bond, None).await.unwrap();
+        info!("bond_controller: {:?}", &bond_controller);
         match subxt_relay_client.fetch(&account, None).await {
             Ok(account_store) => {
                 info!(
@@ -58,7 +58,7 @@ async fn listen_balance(
                     let free = account_store.data.free;
                     let misc_frozen = account_store.data.misc_frozen;
                     if free - misc_frozen >= MIN_POOL_BALANCE {
-                        let _ = bond_controller.clone().map_or_else(
+                        let _ = bond_controller.map_or_else(
                             || system_rpc_tx.clone().start_send(TasksType::RelayBond),
                             |_bond_controller| {
                                 system_rpc_tx.clone().start_send(TasksType::RelayBondExtra)
