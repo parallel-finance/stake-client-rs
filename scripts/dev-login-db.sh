@@ -22,4 +22,5 @@ PG_USERNAME="$(get_config_value username 1)"
 PG_PASSWORD="$(get_config_value password 1)"
 PG_DB="$(get_config_value db 1)"
 
+echo postgres://$PG_USERNAME:$PG_PASSWORD@$PG_HOSTNAME:$PG_PORT/$PG_DB;
 psql postgres://$PG_USERNAME:$PG_PASSWORD@$PG_HOSTNAME:$PG_PORT/$PG_DB;

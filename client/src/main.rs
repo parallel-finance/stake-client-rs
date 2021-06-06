@@ -25,7 +25,10 @@ lazy_static! {
         { Config::from_file("Config.toml").unwrap_or_else(|_| std::process::exit(1)) };
     pub static ref DB: DbExecutor = {
         let url = CFG.get_postgres_url();
-        DbExecutor::new(&url).unwrap_or_else(|_| std::process::exit(1))
+        DbExecutor::new(&url).unwrap_or_else(|err| {
+            println!("exit err:{:?}", err);
+            std::process::exit(1)
+        })
     };
 }
 
@@ -51,7 +54,6 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let file = matches.value_of("file").unwrap();
             let ws_server = matches.value_of("ws_server").unwrap();
             let pool_addr = matches.value_of("pool_addr").unwrap();
-            let first = matches.value_of("first").unwrap();
 
             // get keystore
             let keystore = get_keystore(file.to_string()).unwrap();
@@ -63,14 +65,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
             // get other signatories
             let other_signatories = keystore.get_other_signatories().unwrap();
-            let r = start_withdraw_task(
-                pair,
-                other_signatories,
-                ws_server,
-                pool_addr,
-                first == "true",
-            )
-            .await;
+            let r = start_withdraw_task(pair, other_signatories, ws_server, pool_addr).await;
             println!("start_withdraw_task finished:{:?}", r);
         }
 

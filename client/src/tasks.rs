@@ -2,12 +2,13 @@ use crate::listener::listen_pool_balances;
 use crate::primitives::{AccountId, MIN_POOL_BALANCE};
 
 use crate::DB;
+use chrono::{NaiveDateTime, Utc};
 use db::executor::DbExecutor;
-use db::model::{Withdraw, WithdrawTx};
-use db::schema::withdraw_tx::dsl::*;
+use db::model::Withdraw;
+use db::schema::withdraw::dsl::*;
 use diesel::{
-    self, query_dsl::BelongingToDsl, BoolExpressionMethods, Connection, ExpressionMethods,
-    QueryDsl, RunQueryDsl,
+    self, insert_into, query_dsl::BelongingToDsl, update, BoolExpressionMethods, Connection,
+    ExpressionMethods, QueryDsl, RunQueryDsl,
 };
 
 use runtime::error::Error;
@@ -30,7 +31,6 @@ pub(crate) async fn start_withdraw_task(
     others: Vec<AccountId>,
     ws_server: &str,
     pool_addr: &str,
-    first: bool, // temp use
 ) -> Result<(), Error> {
     // initialize heiko related api
     let subxt_client = ClientBuilder::<HeikoRuntime>::new()
@@ -43,17 +43,40 @@ pub(crate) async fn start_withdraw_task(
             Error::SubxtError(e)
         })?;
 
+    let mut current_withdraw_index: i32 = 0;
+    let conn = DB.get_connection().map_err(|e| {
+        println!("failed to connect DB, error: {:?}", e);
+        Error::SubxtError(SubError::Other("failed to connect DB".to_string()))
+    })?;
+
     loop {
-        // todo complete me
-        println!("start listen_pool_balances");
+        let r = withdraw.load::<Withdraw>(&conn).map_err(|e| {
+            println!("\r\rfailed to load Withdraw table, error: {:?}", e);
+            Error::SubxtError(SubError::Other("failed to load Withdraw table".to_string()))
+        })?;
+        current_withdraw_index = r.len() as i32;
+        println!("current index:{}", current_withdraw_index);
+        if current_withdraw_index != 0 {
+            println!("last withdraw record:{:?}", r[r.len() - 1]);
+        }
+
+        println!("[+] Listen to pool's balance");
         let _ =
             listen_pool_balances(subxt_client.clone(), ws_server.clone(), pool_addr.clone()).await;
 
-        // todo get state from db
-        // let conn = DB.get_connection().unwrap();
-        // let r = withdraw_tx.load::<Withdraw>(&conn).unwrap();
-
-        // conn.
+        let withdraw_creating = Withdraw {
+            idx: current_withdraw_index.clone(),
+            state: "creating".to_string(),
+            created_at: Utc::now().naive_utc(),
+        };
+        let first: bool;
+        match insert_into(withdraw)
+            .values(&withdraw_creating)
+            .execute(&conn)
+        {
+            Ok(_) => first = true,
+            Err(_) => first = false,
+        }
 
         let signer = PairSigner::<HeikoRuntime, Pair>::new(pair.clone());
         if first {
@@ -61,12 +84,27 @@ pub(crate) async fn start_withdraw_task(
                 do_first_withdraw(others.clone(), pool_addr.clone(), &subxt_client, &signer)
                     .await?;
             let _ = wait_transfer_finished(&subxt_client, account_id, call_hash).await?;
-            // todo wait transfer finished and update db
+            println!("[+] Create withdraw transaction finished")
         } else {
             let (account_id, call_hash) =
                 do_last_withdraw(others.clone(), pool_addr.clone(), &subxt_client, &signer).await?;
             let _ = wait_transfer_finished(&subxt_client, account_id, call_hash).await?;
-            // todo wait transfer finished and update db
+
+            // the second wallet nee to update withdraw db
+            // todo use all client to deal with withdraw work
+            let withdraw_created = Withdraw {
+                idx: current_withdraw_index.clone(),
+                state: "created".to_string(),
+                created_at: Utc::now().naive_utc(),
+            };
+            match update(withdraw.filter(idx.eq(current_withdraw_index.clone())))
+                .set(&withdraw_created)
+                .execute(&conn)
+            {
+                Ok(con) => println!("update withdraw db finished"),
+                Err(_) => println!("failed to update withdraw"),
+            }
+            println!("[+] Create withdraw transaction finished")
         }
         //task::block_on(do_middle_withdraw());
     }
@@ -79,7 +117,7 @@ pub(crate) async fn do_first_withdraw(
     subxt_client: &Client<HeikoRuntime>,
     signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
 ) -> Result<(AccountId, [u8; 32]), Error> {
-    println!("do_first_withdraw");
+    println!("[+] Create first withdraw transaction");
 
     println!("---------- start create multi-signature transaction ----------");
     // 1.1 construct balance transfer call
@@ -98,6 +136,7 @@ pub(crate) async fn do_first_withdraw(
     let account_id = AccountId::from_string(pool_addr)
         .map_err(|_| SubError::Other("invalid pool address".to_string()))?;
     let call_hash = kusama::api::multisig_call_hash(subxt_client, call.clone())?;
+    println!("---------- end create multi-signature transaction ----------");
     Ok((account_id, call_hash))
 }
 
@@ -114,7 +153,7 @@ pub(crate) async fn do_last_withdraw(
     subxt_client: &Client<HeikoRuntime>,
     signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
 ) -> Result<(AccountId, [u8; 32]), Error> {
-    println!("do_last_withdraw");
+    println!("[+] Crate last withdraw transaction");
     println!("---------- start create multi-signature transaction ----------");
     // 1.1 construct balance transfer call
     // todo change blances_transfer to withdraw
@@ -139,6 +178,7 @@ pub(crate) async fn do_last_withdraw(
     // 1.2 initial the multisg call
     let result = subxt_client.submit(mc, signer).await?;
     println!("multisig_as_multi_call hash {:?}", result);
+    println!("---------- end create multi-signature transaction ----------");
     Ok((account_id, call_hash))
 }
 
@@ -147,8 +187,8 @@ pub(crate) async fn get_last_withdraw_time_point(
     account_id: AccountId,
     call_hash: [u8; 32],
 ) -> Result<Timepoint<u32>, Error> {
+    println!("get time point, waiting...");
     loop {
-        println!("get time point, waiting...");
         let store = kusama::api::MultisigsStore::<HeikoRuntime> {
             multisig_account: account_id.clone(),
             call_hash: call_hash.clone(),

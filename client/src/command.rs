@@ -28,7 +28,6 @@ pub fn get_app<'a, 'b>() -> App<'a, 'b> {
             <file>  'The keystore filename with path'
             <ws_server>  'The ws server url'
             <pool_addr>  'The address of pool in para chain'
-            <first>  'temp use, first to create withdraw transaction'
             ",
                 ),
             SubCommand::with_name("getaddress").about("Print account address"),

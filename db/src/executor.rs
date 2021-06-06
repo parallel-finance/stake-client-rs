@@ -16,7 +16,7 @@ impl DbExecutor {
         let url = url.into();
 
         match Pool::builder()
-            .connection_timeout(Duration::from_secs(5))
+            .connection_timeout(Duration::from_secs(60))
             .error_handler(Box::new(R2d2ErrorHandler))
             .build(ConnectionManager::<PgConnection>::new(&url))
         {
