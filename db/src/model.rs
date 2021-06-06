@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::schema::{withdraw, withdraw_tx};
 
-#[derive(Eq, PartialEq, Debug, Serialize, Deserialize, Queryable, Identifiable)]
+#[derive(
+    AsChangeset, Eq, PartialEq, Debug, Serialize, Deserialize, Queryable, Identifiable, Insertable,
+)]
 #[table_name = "withdraw"]
 #[primary_key(idx)]
 pub struct Withdraw {
@@ -12,7 +14,9 @@ pub struct Withdraw {
     pub created_at: NaiveDateTime,
 }
 
-#[derive(Eq, PartialEq, Debug, Serialize, Deserialize, Queryable, Identifiable)]
+#[derive(
+    AsChangeset, Eq, PartialEq, Debug, Serialize, Deserialize, Queryable, Identifiable, Insertable,
+)]
 #[table_name = "withdraw_tx"]
 #[primary_key(idx)]
 pub struct WithdrawTx {

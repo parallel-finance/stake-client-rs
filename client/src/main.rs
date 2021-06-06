@@ -11,22 +11,13 @@ mod tasks;
 mod test;
 mod wallet;
 
-use crate::keystore::Keystore;
-use async_std::task;
 use config::Config;
 use crypto::*;
 use db::executor::DbExecutor;
-use db::model::WithdrawTx;
-use db::schema::withdraw_tx::dsl::*;
 use lazy_static::lazy_static;
 use log::{info, warn};
-use parallel_primitives::CurrencyId;
 use primitives::AccountId;
-use sp_core::crypto::Pair as TraitPair;
-use sp_core::sr25519::Pair;
 use std::fs;
-use std::path::PathBuf;
-use structopt::StructOpt;
 use tasks::start_withdraw_task;
 use wallet::*;
 lazy_static! {
@@ -34,7 +25,10 @@ lazy_static! {
         { Config::from_file("Config.toml").unwrap_or_else(|_| std::process::exit(1)) };
     pub static ref DB: DbExecutor = {
         let url = CFG.get_postgres_url();
-        DbExecutor::new(&url).unwrap_or_else(|_| std::process::exit(1))
+        DbExecutor::new(&url).unwrap_or_else(|err| {
+            println!("exit err:{:?}", err);
+            std::process::exit(1)
+        })
     };
 }
 
@@ -60,7 +54,6 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let file = matches.value_of("file").unwrap();
             let ws_server = matches.value_of("ws_server").unwrap();
             let pool_addr = matches.value_of("pool_addr").unwrap();
-            let first = matches.value_of("first").unwrap();
 
             // get keystore
             let keystore = get_keystore(file.to_string()).unwrap();
@@ -72,14 +65,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
             // get other signatories
             let other_signatories = keystore.get_other_signatories().unwrap();
-            let r = start_withdraw_task(
-                pair,
-                other_signatories,
-                ws_server,
-                pool_addr,
-                first == "true",
-            )
-            .await;
+            let r = start_withdraw_task(pair, other_signatories, ws_server, pool_addr).await;
             println!("start_withdraw_task finished:{:?}", r);
         }
 
@@ -131,7 +117,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             println!("todo multi addr");
         }
 
-        ("show", Some(matches)) => {
+        ("show", Some(_)) => {
             println!("todo show");
         }
 

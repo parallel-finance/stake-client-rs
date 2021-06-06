@@ -1,10 +1,7 @@
-use super::kusama;
 use super::AccountId;
 use super::Error;
 use super::KusamaRuntime;
-use super::MIN_POOL_BALANCE;
-use log::{error, info, warn};
-use sp_keyring::AccountKeyring;
+use log::info;
 use substrate_subxt::{Client, Signer};
 /// The first wallet to call withdraw. No need use 'TimePoint' and call 'approve_as_multi'.
 pub(crate) async fn do_first_relay_bond(

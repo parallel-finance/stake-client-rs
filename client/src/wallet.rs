@@ -2,7 +2,6 @@ use crate::crypto::*;
 use crate::keystore::Keystore;
 use crate::pkcs8;
 use crate::primitives::AccountId;
-use rustbreak::{deser::Bincode, FileDatabase};
 use sp_core::{blake2_256, crypto::Ss58Codec, hexdisplay::HexDisplay, Decode, Encode};
 
 pub fn get_keystore(path: String) -> Result<Keystore, Box<dyn std::error::Error>> {
@@ -23,7 +22,7 @@ pub fn create_keystore(
     let (public_key, secret_key) = (pair.public().to_raw_vec(), pair.to_raw_vec());
     let encoded = pkcs8::encode(&secret_key[..], &public_key[..], password)
         .map_err(|_err| "failed to encode pair")?;
-    let addr = pair.public().to_ss58check();
+    // let addr = pair.public().to_ss58check();
     println!(
         "public key:{}",
         format!("0x{}", HexDisplay::from(&public_key.as_ref()))
