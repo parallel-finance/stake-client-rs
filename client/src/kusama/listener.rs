@@ -5,7 +5,6 @@ use super::LISTEN_INTERVAL;
 use super::MIN_POOL_BALANCE;
 use async_std::task;
 use futures::join;
-use log::warn;
 use log::{debug, error, info};
 use sp_utils::mpsc::TracingUnboundedSender;
 use std::str::FromStr;

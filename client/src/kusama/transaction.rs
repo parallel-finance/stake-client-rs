@@ -1,9 +1,10 @@
+use super::kusama;
 use super::AccountId;
 use super::Error;
 use super::KusamaRuntime;
 use super::MIN_POOL_BALANCE;
 use log::{error, info, warn};
-use sp_core::{crypto::Pair as TraitPair, crypto::Ss58Codec};
+use sp_core::crypto::Ss58Codec;
 use sp_keyring::AccountKeyring;
 use std::str::FromStr;
 use substrate_subxt::{staking, Client, Signer};
@@ -25,7 +26,7 @@ pub(crate) async fn do_first_relay_bond(
     );
 
     let account_id = AccountId::from_string(&pool_addr)
-        .map_err(|e| Error::Other("parse pool_addr to account id error".to_string()))?;
+        .map_err(|_e| Error::Other("parse pool_addr to account id error".to_string()))?;
     let call_hash = kusama::api::multisig_call_hash(subxt_client, call)
         .map_err(|e| Error::ClientRuntimeError(e))?;
     let when = get_time_point(subxt_client, account_id.clone(), call_hash).await;
@@ -71,7 +72,7 @@ pub(crate) async fn do_last_relay_bond(
         staking::RewardDestination::Staked,
     );
     let public = sp_core::ed25519::Public::from_str(&pool_addr)
-        .map_err(|e| Error::Other("parse pool_addr to account id error".to_string()))?;
+        .map_err(|_e| Error::Other("parse pool_addr to account id error".to_string()))?;
     let call_hash = kusama::api::multisig_call_hash(subxt_client, call)
         .map_err(|e| Error::ClientRuntimeError(e))?;
     let when = get_time_point(subxt_client, public.into(), call_hash).await;
@@ -139,7 +140,7 @@ pub(crate) async fn do_first_relay_bond_extra(
     let call = kusama::api::staking_bond_extra_call::<KusamaRuntime>(MIN_POOL_BALANCE);
 
     let account_id = AccountId::from_string(&pool_addr)
-        .map_err(|e| Error::Other("parse pool_addr to account id error".to_string()))?;
+        .map_err(|_e| Error::Other("parse pool_addr to account id error".to_string()))?;
     let call_hash = kusama::api::multisig_call_hash(subxt_client, call.clone())
         .map_err(|e| Error::ClientRuntimeError(e))?;
     let when = get_time_point(subxt_client, account_id.clone(), call_hash).await;
@@ -172,7 +173,7 @@ pub(crate) async fn do_last_relay_bond_extra(
     info!("do_last_relay_bond_extra");
     let call = kusama::api::staking_bond_extra_call::<KusamaRuntime>(MIN_POOL_BALANCE);
     let public = sp_core::ed25519::Public::from_str(&pool_addr)
-        .map_err(|e| Error::Other("parse pool_addr to account id error".to_string()))?;
+        .map_err(|_e| Error::Other("parse pool_addr to account id error".to_string()))?;
     let call_hash = kusama::api::multisig_call_hash(subxt_client, call.clone())
         .map_err(|e| Error::ClientRuntimeError(e))?;
     let when = get_time_point(subxt_client, public.into(), call_hash).await;

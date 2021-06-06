@@ -5,7 +5,7 @@ use super::KusamaRuntime;
 use super::TasksType;
 use super::TASK_INTERVAL;
 use async_std::task;
-use log::{debug, info, warn};
+use log::{error, info, warn};
 use sp_utils::mpsc::TracingUnboundedReceiver;
 use std::time::Duration;
 use substrate_subxt::{Client, Signer};
@@ -125,15 +125,15 @@ async fn relay_bond_extra(
 }
 
 async fn para_record_rewards(
-    subxt_para_client: &Client<HeikoRuntime>,
-    para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
+    _subxt_para_client: &Client<HeikoRuntime>,
+    _para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
 ) {
     info!("para_record_rewards");
 }
 
 async fn para_record_slash(
-    subxt_para_client: &Client<HeikoRuntime>,
-    para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
+    _subxt_para_client: &Client<HeikoRuntime>,
+    _para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
 ) {
     info!("para_record_slash");
 }
