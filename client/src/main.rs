@@ -8,7 +8,7 @@ mod listener;
 mod pkcs8;
 mod primitives;
 mod tasks;
-mod test;
+// mod test;
 mod wallet;
 
 use config::Config;

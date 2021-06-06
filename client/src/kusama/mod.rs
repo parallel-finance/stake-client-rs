@@ -10,8 +10,8 @@ use runtime::kusama::{self, runtime::KusamaRuntime};
 use sp_core::sr25519::Pair;
 use sp_utils::mpsc::tracing_unbounded;
 use substrate_subxt::{ClientBuilder, PairSigner};
-pub const LISTEN_INTERVAL: u64 = 10000;
-pub const TASK_INTERVAL: u64 = 5000;
+pub const LISTEN_INTERVAL: u64 = 24000; // 6 * block_time
+pub const TASK_INTERVAL: u64 = 6000;
 pub const MIN_POOL_BALANCE: u128 = 100_000_000_000_000;
 pub enum TasksType {
     RelayBond,

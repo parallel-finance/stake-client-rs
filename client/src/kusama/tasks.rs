@@ -5,7 +5,7 @@ use super::KusamaRuntime;
 use super::TasksType;
 use super::TASK_INTERVAL;
 use async_std::task;
-use log::{debug, info, warn};
+use log::{error, info, warn};
 use sp_utils::mpsc::TracingUnboundedReceiver;
 use std::time::Duration;
 use substrate_subxt::{Client, Signer};
@@ -37,7 +37,14 @@ pub async fn dispatch(
                             .await
                         }
                         TasksType::RelayBondExtra => {
-                            relay_bond_extra(subxt_relay_client, relay_signer, first).await
+                            relay_bond_extra(
+                                subxt_relay_client,
+                                relay_signer,
+                                others.clone(),
+                                pool_addr.clone(),
+                                first,
+                            )
+                            .await
                         }
                         TasksType::ParaRecordRewards => {
                             para_record_rewards(subxt_para_client, para_signer).await
@@ -64,15 +71,18 @@ async fn relay_bond(
     pool_addr: String,
     first: bool,
 ) {
-    //TODO
     info!("relay_bond");
     if first {
-        let _ = transaction::do_first_relay_bond(others.clone(), &subxt_relay_client, relay_signer)
-            .await
-            .unwrap();
-        // let _ = wait_transfer_finished(&subxt_client, account_id, call_hash).await?;
-        // todo wait transfer finished and update db
+        let _ = transaction::do_first_relay_bond(
+            others.clone(),
+            pool_addr,
+            &subxt_relay_client,
+            relay_signer,
+        )
+        .await
+        .map_err(|e| error!("error do_first_relay_bond: {:?}", e));
     } else {
+        task::sleep(Duration::from_millis(TASK_INTERVAL)).await;
         let _ = transaction::do_last_relay_bond(
             others.clone(),
             pool_addr,
@@ -80,31 +90,50 @@ async fn relay_bond(
             relay_signer,
         )
         .await
-        .unwrap();
-        // let _ = wait_transfer_finished(&subxt_client, account_id, call_hash).await?;
-        // todo wait transfer finished and update db
+        .map_err(|e| error!("error do_last_relay_bond: {:?}", e));
     }
-    task::sleep(Duration::from_millis(5000)).await;
 }
 
 async fn relay_bond_extra(
     subxt_relay_client: &Client<KusamaRuntime>,
     relay_signer: &(dyn Signer<KusamaRuntime> + Send + Sync),
+    others: Vec<AccountId>,
+    pool_addr: String,
     first: bool,
 ) {
-    debug!("relay_bond_extra");
+    info!("relay_bond_extra");
+    if first {
+        let _ = transaction::do_first_relay_bond_extra(
+            others.clone(),
+            pool_addr,
+            &subxt_relay_client,
+            relay_signer,
+        )
+        .await
+        .map_err(|e| error!("error do_first_relay_bond_extra: {:?}", e));
+    } else {
+        task::sleep(Duration::from_millis(TASK_INTERVAL)).await;
+        let _ = transaction::do_last_relay_bond_extra(
+            others.clone(),
+            pool_addr,
+            &subxt_relay_client,
+            relay_signer,
+        )
+        .await
+        .map_err(|e| error!("error do_last_relay_bond_extra: {:?}", e));
+    }
 }
 
 async fn para_record_rewards(
-    subxt_para_client: &Client<HeikoRuntime>,
-    para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
+    _subxt_para_client: &Client<HeikoRuntime>,
+    _para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
 ) {
     info!("para_record_rewards");
 }
 
 async fn para_record_slash(
-    subxt_para_client: &Client<HeikoRuntime>,
-    para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
+    _subxt_para_client: &Client<HeikoRuntime>,
+    _para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
 ) {
     info!("para_record_slash");
 }

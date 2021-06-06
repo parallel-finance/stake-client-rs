@@ -44,21 +44,24 @@ async fn listen_balance(
         stash: account_id.clone(),
     };
 
-    let bond_controller: Option<<KusamaRuntime as System>::AccountId> =
-        subxt_relay_client.fetch(&bond, None).await.unwrap();
-    info!("bond_controller: {:?}", &bond_controller);
     loop {
+        info!("loop listen balance");
         match subxt_relay_client.fetch(&account, None).await {
             Ok(account_store) => {
                 info!(
                     "account id: {:?}, account_store: {:?}",
                     &account_id, &account_store
                 );
+                let bond_controller: Option<<KusamaRuntime as System>::AccountId> =
+                    subxt_relay_client.fetch(&bond, None).await.unwrap();
+                info!("bond_controller: {:?}", &bond_controller);
                 let r = account_store.and_then(|account_store| -> Option<()> {
                     let free = account_store.data.free;
                     let misc_frozen = account_store.data.misc_frozen;
+                    //FIXME: bug, while do the last-mulsig about first-round, the second-round fisrt-mulsig is going.
+                    //for now, make the loop interval longer.
                     if free - misc_frozen >= MIN_POOL_BALANCE {
-                        let _ = bond_controller.clone().map_or_else(
+                        let _ = bond_controller.map_or_else(
                             || system_rpc_tx.clone().start_send(TasksType::RelayBond),
                             |_bond_controller| {
                                 system_rpc_tx.clone().start_send(TasksType::RelayBondExtra)
@@ -73,7 +76,7 @@ async fn listen_balance(
                 error!("listen_balance error: {:?}", e);
             }
         }
-        info!("loop listen balance");
+
         task::sleep(Duration::from_millis(LISTEN_INTERVAL)).await;
     }
 }
@@ -88,6 +91,6 @@ async fn listen_slash_and_reward(
         let _ = system_rpc_tx.start_send(TasksType::ParaRecordRewards);
         let _ = system_rpc_tx.start_send(TasksType::ParaRecordSlash);
         info!("loop listen_slash_and_reward");
-        task::sleep(Duration::from_millis(LISTEN_INTERVAL * 6)).await;
+        task::sleep(Duration::from_millis(LISTEN_INTERVAL)).await;
     }
 }
