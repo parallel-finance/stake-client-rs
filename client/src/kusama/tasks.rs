@@ -82,6 +82,7 @@ async fn relay_bond(
         .await
         .map_err(|e| error!("error do_first_relay_bond: {:?}", e));
     } else {
+        task::sleep(Duration::from_millis(TASK_INTERVAL)).await;
         let _ = transaction::do_last_relay_bond(
             others.clone(),
             pool_addr,
@@ -91,7 +92,6 @@ async fn relay_bond(
         .await
         .map_err(|e| error!("error do_last_relay_bond: {:?}", e));
     }
-    task::sleep(Duration::from_millis(5000)).await;
 }
 
 async fn relay_bond_extra(
@@ -112,6 +112,7 @@ async fn relay_bond_extra(
         .await
         .map_err(|e| error!("error do_first_relay_bond_extra: {:?}", e));
     } else {
+        task::sleep(Duration::from_millis(TASK_INTERVAL)).await;
         let _ = transaction::do_last_relay_bond_extra(
             others.clone(),
             pool_addr,
@@ -121,7 +122,6 @@ async fn relay_bond_extra(
         .await
         .map_err(|e| error!("error do_last_relay_bond_extra: {:?}", e));
     }
-    task::sleep(Duration::from_millis(5000)).await;
 }
 
 async fn para_record_rewards(

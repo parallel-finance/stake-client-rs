@@ -17,7 +17,6 @@ pub(crate) async fn do_first_relay_bond(
     info!("do_first_relay_bond");
     // 1.1 construct staking bond call
     //TODO change to controller address, change the payee type
-    //TODO CHECK the timepoint, if exists, do not repeat
     let ctrl = AccountKeyring::Eve.to_account_id().into();
     let call = kusama::api::staking_bond_call::<KusamaRuntime>(
         &ctrl,
@@ -65,36 +64,44 @@ pub(crate) async fn do_last_relay_bond(
     signer: &(dyn Signer<KusamaRuntime> + Send + Sync),
 ) -> Result<(), Error> {
     info!("do_last_relay_bond");
-    // let ctrl = AccountKeyring::Eve.to_account_id().into();
-    // let call = kusama::api::staking_bond_call::<KusamaRuntime>(
-    //     &ctrl,
-    //     MIN_POOL_BALANCE,
-    //     staking::RewardDestination::Staked,
-    // );
-    // let public =
-    //     sp_core::ed25519::Public::from_str(pool_addr)
-    //         .unwrap();
+    let ctrl = AccountKeyring::Eve.to_account_id().into();
+    let call = kusama::api::staking_bond_call::<KusamaRuntime>(
+        &ctrl,
+        MIN_POOL_BALANCE,
+        staking::RewardDestination::Staked,
+    );
+    let public = sp_core::ed25519::Public::from_str(&pool_addr)
+        .map_err(|e| Error::Other("parse pool_addr to account id error".to_string()))?;
+    let call_hash = kusama::api::multisig_call_hash(subxt_client, call)
+        .map_err(|e| Error::ClientRuntimeError(e))?;
+    let when = get_time_point(subxt_client, public.into(), call_hash).await;
+    if None == when {
+        warn!("timepoint is null, multisig must initial first");
+        return Err(Error::Other("timepoint is null".to_string()));
+    }
+    info!("multisig timepoint: {:?}", when);
 
-    // let kusama::api::MultisigData { when, .. } = subxt_client.fetch(&store, None).await?.unwrap();
-    // println!("multisig timepoint{:?}", when);
-
-    // let call_hash= kusama::api::multisig_call_hash(subxt_client, call).unwrap();
-
-    // let when = get_time_point(subxt_client, public.into(), call_hash).await?;
-
-    // // 3.1 approve the call and execute it
-    // let bob = PairSigner::<RelayRuntime, _>::new(AccountKeyring::Bob.pair());
-    // let mc = kusama::api::multisig_as_multi_call::<RelayRuntime, staking::BondCall<RelayRuntime>>(
-    //     subxt_client,
-    //     2,
-    //     others,
-    //     Some(Timepoint::new(when.height, when.index)),
-    //     call,
-    //     false,
-    //     1_000_000_000_000,
-    // )?;
-    // let result = subxt_client.submit(mc, signer).await.unwrap();
-    // println!("multisig_as_multi_call hash {:?}", result);
+    // FIXME: clone call
+    let call = kusama::api::staking_bond_call::<KusamaRuntime>(
+        &ctrl,
+        MIN_POOL_BALANCE,
+        staking::RewardDestination::Staked,
+    );
+    // 3.1 approve the call and execute it
+    let mc = kusama::api::multisig_as_multi_call::<KusamaRuntime, staking::BondCall<KusamaRuntime>>(
+        subxt_client,
+        2,
+        others,
+        when,
+        call,
+        false,
+        1_000_000_000_000,
+    )?;
+    let result = subxt_client
+        .watch(mc, signer)
+        .await
+        .map_err(|e| Error::SubxtError(e))?;
+    info!("multisig_as_multi_call result {:?}", result);
     Ok(())
 }
 
@@ -128,7 +135,6 @@ pub(crate) async fn do_first_relay_bond_extra(
     signer: &(dyn Signer<KusamaRuntime> + Send + Sync),
 ) -> Result<(), Error> {
     info!("do_first_relay_bond_extra");
-    //TODO CHECK the timepoint, if exists, do not repeat
     // 1.1 construct staking bond call
     let call = kusama::api::staking_bond_extra_call::<KusamaRuntime>(MIN_POOL_BALANCE);
 
@@ -164,5 +170,35 @@ pub(crate) async fn do_last_relay_bond_extra(
     signer: &(dyn Signer<KusamaRuntime> + Send + Sync),
 ) -> Result<(), Error> {
     info!("do_last_relay_bond_extra");
+    let call = kusama::api::staking_bond_extra_call::<KusamaRuntime>(MIN_POOL_BALANCE);
+    let public = sp_core::ed25519::Public::from_str(&pool_addr)
+        .map_err(|e| Error::Other("parse pool_addr to account id error".to_string()))?;
+    let call_hash = kusama::api::multisig_call_hash(subxt_client, call.clone())
+        .map_err(|e| Error::ClientRuntimeError(e))?;
+    let when = get_time_point(subxt_client, public.into(), call_hash).await;
+    if None == when {
+        warn!("timepoint is null, multisig must initial first");
+        return Err(Error::Other("timepoint is null".to_string()));
+    }
+    info!("multisig timepoint: {:?}", when);
+
+    // 3.1 approve the call and execute it
+    let mc = kusama::api::multisig_as_multi_call::<
+        KusamaRuntime,
+        kusama::api::BondExtraCall<KusamaRuntime>,
+    >(
+        subxt_client,
+        2,
+        others,
+        when,
+        call,
+        false,
+        1_000_000_000_000,
+    )?;
+    let result = subxt_client
+        .watch(mc, signer)
+        .await
+        .map_err(|e| Error::SubxtError(e))?;
+    info!("multisig_as_multi_call result {:?}", result);
     Ok(())
 }
