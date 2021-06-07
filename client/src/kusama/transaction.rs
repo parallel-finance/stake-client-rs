@@ -3,7 +3,7 @@ use super::AccountId;
 use super::Error;
 use super::KusamaRuntime;
 use super::MIN_POOL_BALANCE;
-use log::{error, info, warn};
+use log::{info, warn};
 use sp_core::crypto::Ss58Codec;
 use sp_keyring::AccountKeyring;
 use std::str::FromStr;
@@ -148,7 +148,7 @@ pub(crate) async fn get_time_point(
     if let Some(Some(kusama::api::MultisigData { when, .. })) = subxt_client
         .fetch(&store, None)
         .await
-        .map_err(|e| error!("error get_time_point: {:?}", e))
+        .map_err(|e| warn!("error get_time_point: {:?}", e))
         .ok()
     {
         return Some(when);

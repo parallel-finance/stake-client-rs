@@ -1,11 +1,12 @@
 use super::transaction;
 use super::AccountId;
+use super::Amount;
 use super::HeikoRuntime;
 use super::KusamaRuntime;
 use super::TasksType;
 use super::TASK_INTERVAL;
 use async_std::task;
-use log::{error, info, warn};
+use log::{info, warn};
 use sp_utils::mpsc::TracingUnboundedReceiver;
 use std::time::Duration;
 use substrate_subxt::{Client, Signer};
@@ -46,11 +47,11 @@ pub async fn dispatch(
                             )
                             .await
                         }
-                        TasksType::ParaRecordRewards => {
-                            para_record_rewards(subxt_para_client, para_signer).await
+                        TasksType::ParaRecordRewards(amount) => {
+                            para_record_rewards(subxt_para_client, para_signer, amount).await
                         }
-                        TasksType::ParaRecordSlash => {
-                            para_record_slash(subxt_para_client, para_signer).await
+                        TasksType::ParaRecordSlash(amount) => {
+                            para_record_slash(subxt_para_client, para_signer, amount).await
                         }
                     }
                 } else {
@@ -80,7 +81,7 @@ async fn relay_bond(
             relay_signer,
         )
         .await
-        .map_err(|e| error!("error do_first_relay_bond: {:?}", e));
+        .map_err(|e| warn!("error do_first_relay_bond: {:?}", e));
     } else {
         task::sleep(Duration::from_millis(TASK_INTERVAL)).await;
         let _ = transaction::do_last_relay_bond(
@@ -90,7 +91,7 @@ async fn relay_bond(
             relay_signer,
         )
         .await
-        .map_err(|e| error!("error do_last_relay_bond: {:?}", e));
+        .map_err(|e| warn!("error do_last_relay_bond: {:?}", e));
     }
 }
 
@@ -110,7 +111,7 @@ async fn relay_bond_extra(
             relay_signer,
         )
         .await
-        .map_err(|e| error!("error do_first_relay_bond_extra: {:?}", e));
+        .map_err(|e| warn!("error do_first_relay_bond_extra: {:?}", e));
     } else {
         task::sleep(Duration::from_millis(TASK_INTERVAL)).await;
         let _ = transaction::do_last_relay_bond_extra(
@@ -120,20 +121,22 @@ async fn relay_bond_extra(
             relay_signer,
         )
         .await
-        .map_err(|e| error!("error do_last_relay_bond_extra: {:?}", e));
+        .map_err(|e| warn!("error do_last_relay_bond_extra: {:?}", e));
     }
 }
 
 async fn para_record_rewards(
     _subxt_para_client: &Client<HeikoRuntime>,
     _para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
+    amount: Amount,
 ) {
-    info!("para_record_rewards");
+    info!("para_record_rewards {:?}", amount);
 }
 
 async fn para_record_slash(
     _subxt_para_client: &Client<HeikoRuntime>,
     _para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
+    amount: Amount,
 ) {
-    info!("para_record_slash");
+    info!("para_record_slash {:?}", amount);
 }

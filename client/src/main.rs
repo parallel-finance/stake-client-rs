@@ -85,7 +85,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
             // get keystore
             let keystore = get_keystore(file.to_string()).unwrap();
-            warn!("{:?}", keystore);
+            info!("{:?}", keystore);
 
             // get pair
             let password = rpassword::read_password_from_tty(Some("Input password:")).ok();

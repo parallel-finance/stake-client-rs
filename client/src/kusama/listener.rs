@@ -1,4 +1,5 @@
 use super::kusama;
+use super::Error;
 use super::KusamaRuntime;
 use super::TasksType;
 use super::LISTEN_INTERVAL;
@@ -6,26 +7,32 @@ use super::MIN_POOL_BALANCE;
 use async_std::task;
 use futures::join;
 use log::{debug, error, info};
+use runtime::pallets::staking::{RewardEvent, SlashEvent};
+use sp_core::Decode;
 use sp_utils::mpsc::TracingUnboundedSender;
 use std::str::FromStr;
 use std::time::Duration;
-use substrate_subxt::{system::System, Client};
-
+use substrate_subxt::sudo::Sudo;
+use substrate_subxt::{system::System, Client, EventSubscription, RawEvent};
 pub async fn listener(
     subxt_relay_client: &Client<KusamaRuntime>,
     system_rpc_tx: TracingUnboundedSender<TasksType>,
     pool_addr: String,
 ) {
     // start future-1 listening relaychain multisig-account balance
-    let f1 = listen_balance(
-        subxt_relay_client.clone(),
-        system_rpc_tx.clone(),
-        pool_addr.clone(),
-    );
+    // let f1 = listen_balance(
+    //     subxt_relay_client.clone(),
+    //     system_rpc_tx.clone(),
+    //     pool_addr.clone(),
+    // );
+    let f1 = async {
+        task::sleep(Duration::from_millis(LISTEN_INTERVAL)).await;
+    };
     // start future-2 listening relaychain slash&reward
-    let f2 = listen_slash_and_reward(subxt_relay_client.clone(), system_rpc_tx.clone(), pool_addr);
+    let f2 = listen_reward(subxt_relay_client.clone(), system_rpc_tx.clone());
+    let f3 = listen_slash(subxt_relay_client.clone(), system_rpc_tx.clone());
     info!("listener join");
-    join!(f1, f2);
+    join!(f1, f2, f3);
 }
 
 async fn listen_balance(
@@ -81,16 +88,60 @@ async fn listen_balance(
     }
 }
 
-async fn listen_slash_and_reward(
-    _subxt_relay_client: Client<KusamaRuntime>,
+async fn listen_reward(
+    subxt_relay_client: Client<KusamaRuntime>,
     mut system_rpc_tx: TracingUnboundedSender<TasksType>,
-    _pool_addr: String,
 ) {
-    //TODO 获取中继链链上状态,向平行链推送reward或slash
+    let sub = subxt_relay_client
+        .subscribe_finalized_events()
+        .await
+        .unwrap();
+    let decoder = subxt_relay_client.events_decoder();
+    let mut sub = EventSubscription::<KusamaRuntime>::new(sub, &decoder);
+    sub.filter_event::<RewardEvent<_>>();
     loop {
-        let _ = system_rpc_tx.start_send(TasksType::ParaRecordRewards);
-        let _ = system_rpc_tx.start_send(TasksType::ParaRecordSlash);
-        info!("loop listen_slash_and_reward");
-        task::sleep(Duration::from_millis(LISTEN_INTERVAL)).await;
+        info!("loop listen_reward");
+        let _ = sub
+            .next()
+            .await
+            .and_then(|result_raw| -> Option<RawEvent> { result_raw.ok() })
+            .and_then(|raw| -> Option<RewardEvent<KusamaRuntime>> {
+                RewardEvent::<KusamaRuntime>::decode(&mut &raw.data[..]).ok()
+            })
+            .and_then(|event| -> Option<()> {
+                info!("Receive Event: {:?}", &event);
+                system_rpc_tx
+                    .start_send(TasksType::ParaRecordRewards(event.amount))
+                    .ok()
+            });
+    }
+}
+
+async fn listen_slash(
+    subxt_relay_client: Client<KusamaRuntime>,
+    mut system_rpc_tx: TracingUnboundedSender<TasksType>,
+) {
+    let sub = subxt_relay_client
+        .subscribe_finalized_events()
+        .await
+        .unwrap();
+    let decoder = subxt_relay_client.events_decoder();
+    let mut sub = EventSubscription::<KusamaRuntime>::new(sub, &decoder);
+    sub.filter_event::<SlashEvent<_>>();
+    loop {
+        info!("loop listen_slash");
+        let _ = sub
+            .next()
+            .await
+            .and_then(|result_raw| -> Option<RawEvent> { result_raw.ok() })
+            .and_then(|raw| -> Option<SlashEvent<KusamaRuntime>> {
+                SlashEvent::<KusamaRuntime>::decode(&mut &raw.data[..]).ok()
+            })
+            .and_then(|event| -> Option<()> {
+                info!("Receive Event: {:?}", &event);
+                system_rpc_tx
+                    .start_send(TasksType::ParaRecordSlash(event.amount))
+                    .ok()
+            });
     }
 }
