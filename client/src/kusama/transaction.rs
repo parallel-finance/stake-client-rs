@@ -27,6 +27,10 @@ pub(crate) async fn do_first_relay_bond(
 
     let account_id = AccountId::from_string(&pool_addr)
         .map_err(|_e| Error::Other("parse pool_addr to account id error".to_string()))?;
+
+    // check again if the balance is correct
+    let _ = check_balance(subxt_client, account_id.clone()).await?;
+
     let call_hash = kusama::api::multisig_call_hash(subxt_client, call)
         .map_err(|e| Error::ClientRuntimeError(e))?;
     let when = get_time_point(subxt_client, account_id.clone(), call_hash).await;
@@ -55,6 +59,31 @@ pub(crate) async fn do_first_relay_bond(
         .map_err(|e| Error::SubxtError(e))?;
     info!("do_first_relay_bond result: {:?}", result);
     Ok(())
+}
+
+async fn check_balance(
+    subxt_client: &Client<KusamaRuntime>,
+    account_id: AccountId,
+) -> Result<(), Error> {
+    let account = kusama::api::AccountStore::<KusamaRuntime> {
+        account: account_id,
+    };
+    subxt_client
+        .fetch(&account, None)
+        .await
+        .map_err(|e| Error::SubxtError(e))?
+        .and_then(|account_store| -> Option<()> {
+            let free = account_store.data.free;
+            let misc_frozen = account_store.data.misc_frozen;
+            if free - misc_frozen >= MIN_POOL_BALANCE {
+                info!("can initial new multisig");
+                return Some(());
+            }
+            None
+        })
+        .ok_or(Error::Other(
+            "free - misc_frozen < MIN_POOL_BALANCE, cann't initial new multisig".to_string(),
+        ))
 }
 
 /// If the wallet is the last one need to get 'TimePoint' and call 'as_multi'.
@@ -141,6 +170,8 @@ pub(crate) async fn do_first_relay_bond_extra(
 
     let account_id = AccountId::from_string(&pool_addr)
         .map_err(|_e| Error::Other("parse pool_addr to account id error".to_string()))?;
+    // check again if the balance is correct
+    let _ = check_balance(subxt_client, account_id.clone()).await?;
     let call_hash = kusama::api::multisig_call_hash(subxt_client, call.clone())
         .map_err(|e| Error::ClientRuntimeError(e))?;
     let when = get_time_point(subxt_client, account_id.clone(), call_hash).await;
