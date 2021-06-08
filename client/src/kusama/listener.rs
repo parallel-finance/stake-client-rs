@@ -1,9 +1,8 @@
 use super::kusama;
-use super::Error;
 use super::KusamaRuntime;
 use super::TasksType;
 use super::LISTEN_INTERVAL;
-use super::MIN_POOL_BALANCE;
+use super::MIN_BOND_BALANCE;
 use async_std::task;
 use futures::join;
 use log::{debug, error, info};
@@ -12,7 +11,6 @@ use sp_core::Decode;
 use sp_utils::mpsc::TracingUnboundedSender;
 use std::str::FromStr;
 use std::time::Duration;
-use substrate_subxt::sudo::Sudo;
 use substrate_subxt::{system::System, Client, EventSubscription, RawEvent};
 pub async fn listener(
     subxt_relay_client: &Client<KusamaRuntime>,
@@ -20,14 +18,11 @@ pub async fn listener(
     pool_addr: String,
 ) {
     // start future-1 listening relaychain multisig-account balance
-    // let f1 = listen_balance(
-    //     subxt_relay_client.clone(),
-    //     system_rpc_tx.clone(),
-    //     pool_addr.clone(),
-    // );
-    let f1 = async {
-        task::sleep(Duration::from_millis(LISTEN_INTERVAL)).await;
-    };
+    let f1 = listen_balance(
+        subxt_relay_client.clone(),
+        system_rpc_tx.clone(),
+        pool_addr.clone(),
+    );
     // start future-2 listening relaychain slash&reward
     let f2 = listen_reward(subxt_relay_client.clone(), system_rpc_tx.clone());
     let f3 = listen_slash(subxt_relay_client.clone(), system_rpc_tx.clone());
@@ -67,7 +62,7 @@ async fn listen_balance(
                     let misc_frozen = account_store.data.misc_frozen;
                     //FIXME: bug, while do the last-mulsig about first-round, the second-round fisrt-mulsig is going.
                     //for now, make the loop interval longer.
-                    if free - misc_frozen >= MIN_POOL_BALANCE {
+                    if free - misc_frozen >= MIN_BOND_BALANCE {
                         let _ = bond_controller.map_or_else(
                             || system_rpc_tx.clone().start_send(TasksType::RelayBond),
                             |_bond_controller| {

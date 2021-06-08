@@ -48,20 +48,35 @@ pub async fn dispatch(
                             .await
                         }
                         TasksType::ParaRecordRewards(amount) => {
-                            para_record_rewards(subxt_para_client, para_signer, amount).await
+                            para_record_rewards(
+                                subxt_para_client,
+                                para_signer,
+                                others.clone(),
+                                pool_addr.clone(),
+                                amount,
+                                first,
+                            )
+                            .await
                         }
                         TasksType::ParaRecordSlash(amount) => {
-                            para_record_slash(subxt_para_client, para_signer, amount).await
+                            para_record_slash(
+                                subxt_para_client,
+                                para_signer,
+                                others.clone(),
+                                pool_addr.clone(),
+                                amount,
+                                first,
+                            )
+                            .await
                         }
                     }
                 } else {
                     warn!("no task type");
                 }
             }
-            Err(e) => warn!("dispatch pending warn: {:?}", e),
+            Err(_e) => info!("dispatch pending..."),
         }
         task::sleep(Duration::from_millis(TASK_INTERVAL)).await;
-        info!("waiting receive");
     }
 }
 
@@ -126,17 +141,65 @@ async fn relay_bond_extra(
 }
 
 async fn para_record_rewards(
-    _subxt_para_client: &Client<HeikoRuntime>,
-    _para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
+    subxt_para_client: &Client<HeikoRuntime>,
+    para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
+    others: Vec<AccountId>,
+    pool_addr: String,
     amount: Amount,
+    first: bool,
 ) {
     info!("para_record_rewards {:?}", amount);
+    if first {
+        let _ = transaction::do_first_para_record_rewards(
+            others.clone(),
+            pool_addr,
+            &subxt_para_client,
+            para_signer,
+            amount,
+        )
+        .await
+        .map_err(|e| warn!("error do_first_para_record_rewards: {:?}", e));
+    } else {
+        let _ = transaction::do_last_para_record_rewards(
+            others.clone(),
+            pool_addr,
+            &subxt_para_client,
+            para_signer,
+            amount,
+        )
+        .await
+        .map_err(|e| warn!("error do_last_para_record_rewards: {:?}", e));
+    }
 }
 
 async fn para_record_slash(
-    _subxt_para_client: &Client<HeikoRuntime>,
-    _para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
+    subxt_para_client: &Client<HeikoRuntime>,
+    para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
+    others: Vec<AccountId>,
+    pool_addr: String,
     amount: Amount,
+    first: bool,
 ) {
     info!("para_record_slash {:?}", amount);
+    if first {
+        let _ = transaction::do_first_para_record_slash(
+            others.clone(),
+            pool_addr,
+            &subxt_para_client,
+            para_signer,
+            amount,
+        )
+        .await
+        .map_err(|e| warn!("error do_first_para_record_slash: {:?}", e));
+    } else {
+        let _ = transaction::do_last_para_record_slash(
+            others.clone(),
+            pool_addr,
+            &subxt_para_client,
+            para_signer,
+            amount,
+        )
+        .await
+        .map_err(|e| warn!("error do_last_para_record_slash: {:?}", e));
+    }
 }
