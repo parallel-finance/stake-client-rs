@@ -14,7 +14,7 @@ pub struct RewardEvent<T: Staking> {
     pub amount: T::Balance,
 }
 
-/// Reward event.
+/// Slash event.
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct SlashEvent<T: Staking> {
     /// Account balance was transfered from.
