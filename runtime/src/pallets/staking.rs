@@ -1,8 +1,27 @@
-use codec::Encode;
+use codec::{Decode, Encode};
 pub use substrate_subxt::staking::BondedStore;
 use substrate_subxt::staking::{
     BondCall, NominateCall, RewardDestination, Staking as SubxtStaking,
 };
+pub use substrate_subxt::system::System;
+
+/// Reward event.
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct RewardEvent<T: Staking> {
+    /// Account balance was transfered from.
+    pub account: T::AccountId,
+    /// Amount of balance that was transfered.
+    pub amount: T::Balance,
+}
+
+/// Slash event.
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct SlashEvent<T: Staking> {
+    /// Account balance was transfered from.
+    pub account: T::AccountId,
+    /// Amount of balance that was transfered.
+    pub amount: T::Balance,
+}
 
 #[module]
 pub trait Staking: SubxtStaking {}

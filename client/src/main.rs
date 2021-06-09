@@ -15,7 +15,7 @@ use config::Config;
 use crypto::*;
 use db::executor::DbExecutor;
 use lazy_static::lazy_static;
-use log::{info, warn};
+use log::info;
 use primitives::AccountId;
 use std::fs;
 use tasks::start_withdraw_task;
@@ -85,7 +85,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
             // get keystore
             let keystore = get_keystore(file.to_string()).unwrap();
-            warn!("{:?}", keystore);
+            info!("{:?}", keystore);
 
             // get pair
             let password = rpassword::read_password_from_tty(Some("Input password:")).ok();

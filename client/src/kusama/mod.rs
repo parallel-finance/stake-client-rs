@@ -5,20 +5,22 @@ use crate::error::Error;
 use crate::primitives::AccountId;
 use futures::join;
 use log::error;
-use runtime::heiko::runtime::HeikoRuntime;
+use runtime::heiko::{self, runtime::HeikoRuntime};
 use runtime::kusama::{self, runtime::KusamaRuntime};
+use runtime::pallets::multisig::Multisig;
 use sp_core::sr25519::Pair;
 use sp_utils::mpsc::tracing_unbounded;
-use substrate_subxt::{ClientBuilder, PairSigner};
+use substrate_subxt::{system::System, ClientBuilder, PairSigner};
 pub const LISTEN_INTERVAL: u64 = 24000; // 6 * block_time
 pub const TASK_INTERVAL: u64 = 6000;
-pub const MIN_POOL_BALANCE: u128 = 100_000_000_000_000;
+pub const MIN_BOND_BALANCE: u128 = 100_000_000_000_000;
 pub enum TasksType {
     RelayBond,
     RelayBondExtra,
-    ParaRecordRewards,
-    ParaRecordSlash,
+    ParaRecordRewards(Amount),
+    ParaRecordSlash(Amount),
 }
+pub type Amount = u128;
 
 //todo this is a TemporaryCmd receive arguments
 pub struct TemporaryCmd {
@@ -37,7 +39,7 @@ pub async fn run(cmd: &TemporaryCmd) -> Result<(), Error> {
     // initial relaychain client
     let subxt_relay_client = ClientBuilder::<KusamaRuntime>::new()
         .set_url(cmd.relay_ws_server.clone())
-        // .register_type_size::<([u8; 20])>("EthereumAddress")
+        .register_type_size::<<KusamaRuntime as System>::AccountId>("T::AccountId")
         .skip_type_sizes_check()
         .build()
         .await
@@ -51,6 +53,7 @@ pub async fn run(cmd: &TemporaryCmd) -> Result<(), Error> {
     // initial parachain client
     let subxt_para_client = ClientBuilder::<HeikoRuntime>::new()
         .set_url(cmd.para_ws_server.clone())
+        .register_type_size::<<KusamaRuntime as System>::AccountId>("T::AccountId")
         .skip_type_sizes_check()
         .build()
         .await
