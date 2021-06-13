@@ -26,7 +26,7 @@ use wallet::*;
 
 lazy_static! {
     pub static ref CFG: Config =
-        { Config::from_file("Config.toml").unwrap_or_else(|_| std::process::exit(1)) };
+        Config::from_file("Config.toml").unwrap_or_else(|_| std::process::exit(1));
     pub static ref DB: DbExecutor = {
         let url = CFG.get_postgres_url();
         DbExecutor::new(&url).unwrap_or_else(|err| {
@@ -73,6 +73,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             // get other signatories
             let other_signatories = keystore.get_other_signatories().unwrap();
             let r = start_withdraw_task(
+                keystore.threshold,
                 pair,
                 other_signatories,
                 ws_server,

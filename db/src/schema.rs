@@ -3,6 +3,8 @@ table! {
         idx -> Int4,
         state -> Varchar,
         created_at -> Timestamp,
+        height -> Nullable<Int4>,
+        sig_count -> Nullable<Int4>,
     }
 }
 

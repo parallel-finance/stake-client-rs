@@ -1,29 +1,23 @@
-use crate::kusama::transaction::get_time_point;
 use crate::listener::listen_pool_balances;
 use crate::primitives::{AccountId, MIN_POOL_BALANCE};
 
 use crate::DB;
-use chrono::{NaiveDateTime, Utc};
-use db::executor::DbExecutor;
+use chrono::Utc;
 use db::model::Withdraw;
 use db::schema::withdraw::dsl::*;
-use diesel::{
-    self, insert_into, query_dsl::BelongingToDsl, update, BoolExpressionMethods, Connection,
-    ExpressionMethods, QueryDsl, RunQueryDsl,
-};
+use diesel::{self, insert_into, update, ExpressionMethods, QueryDsl, RunQueryDsl};
 
 use core::marker::PhantomData;
 use parallel_primitives::CurrencyId;
 use runtime::error::Error;
 use runtime::heiko::{self, runtime::HeikoRuntime};
 use runtime::kusama::{self};
-use runtime::pallets::liquid_staking::WithdrawCall;
-use runtime::pallets::multisig::{Multisig, Timepoint};
+use runtime::pallets::multisig::Multisig;
 use sp_core::crypto::Ss58Codec;
 use sp_core::sr25519::Pair;
 use sp_keyring::AccountKeyring;
 use std::{thread, time};
-use substrate_subxt::{balances, sudo, Client, ClientBuilder, PairSigner, Signer};
+use substrate_subxt::{sudo, Client, ClientBuilder, PairSigner, Signer};
 use substrate_subxt::{Error as SubError, Runtime};
 
 // const DEFAULT_WS_SERVER: &str = "ws://127.0.0.1:9944";
@@ -31,6 +25,7 @@ use substrate_subxt::{Error as SubError, Runtime};
 
 /// start withdraw task, ws_server: ws://127.0.0.1:9944
 pub(crate) async fn start_withdraw_task(
+    threshold: u16,
     pair: Pair,
     others: Vec<AccountId>,
     ws_server: &str,
@@ -61,20 +56,20 @@ pub(crate) async fn start_withdraw_task(
     let pool_account_id = AccountId::from_string(pool_addr)
         .map_err(|_| SubError::Other("invalid pool address".to_string()))?;
 
-    let r = withdraw.load::<Withdraw>(&conn).map_err(|e| {
-        println!("failed to load Withdraw table, error: {:?}", e);
-        Error::SubxtError(SubError::Other("failed to load Withdraw table".to_string()))
-    })?;
-
     loop {
-        // get call_hash
-        // call_hash query db
-        // exist &&
-        current_withdraw_index = r.len() as i32;
+        let table_withdraw = withdraw.load::<Withdraw>(&conn).map_err(|e| {
+            println!("failed to load Withdraw table, error: {:?}", e);
+            Error::SubxtError(SubError::Other("failed to load Withdraw table".to_string()))
+        })?;
+
+        current_withdraw_index = table_withdraw.len() as i32;
         let mut creating: bool = false;
         if current_withdraw_index != 0 {
-            println!("last withdraw record:{:?}", r[r.len() - 1]);
-            if r[r.len() - 1].state == "creating".to_string() {
+            println!(
+                "last withdraw record:{:?}",
+                table_withdraw[table_withdraw.len() - 1]
+            );
+            if table_withdraw[table_withdraw.len() - 1].state == "creating".to_string() {
                 creating = true
             }
         }
@@ -110,6 +105,8 @@ pub(crate) async fn start_withdraw_task(
             idx: current_withdraw_index.clone(),
             state: "creating".to_string(),
             created_at: Utc::now().naive_utc(),
+            sig_count: Some(1),
+            height: Some(0),
         };
         let first: bool;
         match insert_into(withdraw)
@@ -127,33 +124,108 @@ pub(crate) async fn start_withdraw_task(
                 wait_transfer_finished(&subxt_client, multi_account_id.clone(), call_hash).await?;
             println!("[+] Create withdraw transaction finished")
         } else {
-            let call_hash = do_last_withdraw(
-                others.clone(),
-                multi_account_id.clone(),
-                &subxt_client,
-                &signer,
-            )
-            .await?;
-            let _ =
-                wait_transfer_finished(&subxt_client, multi_account_id.clone(), call_hash).await?;
+            let mut finished: bool = false;
+            let mut last: bool = false;
+            let mut signature_count: i32 = 0;
 
-            // the second wallet nee to update withdraw db
-            // todo use all client to deal with withdraw work
-            let withdraw_created = Withdraw {
-                idx: current_withdraw_index.clone(),
-                state: "created".to_string(),
-                created_at: Utc::now().naive_utc(),
-            };
-            match update(withdraw.filter(idx.eq(current_withdraw_index.clone())))
-                .set(&withdraw_created)
-                .execute(&conn)
-            {
-                Ok(_con) => println!("update withdraw db finished"),
-                Err(_) => println!("failed to update withdraw"),
+            // try to get current sig_count and update to sig_count+1
+            loop {
+                let sc: Option<i32> = withdraw
+                    .filter(idx.eq(current_withdraw_index.clone()))
+                    .select(sig_count)
+                    .first(&conn)
+                    .map_err(|_| SubError::Other("failed to get sig count".to_string()))?;
+                let count: i32;
+                match sc {
+                    Some(c) => count = c,
+                    None => count = 0,
+                }
+
+                let withdraw_created = Withdraw {
+                    idx: current_withdraw_index.clone(),
+                    state: "created".to_string(),
+                    sig_count: Some(count.clone() + 1),
+                    height: Some(0),
+                    created_at: Utc::now().naive_utc(),
+                };
+
+                if count + 1 > threshold as i32 {
+                    finished = true;
+                    break;
+                }
+
+                match update(withdraw.filter(idx.eq(current_withdraw_index.clone())))
+                    .filter(sig_count.eq(count.clone()))
+                    .set(&withdraw_created)
+                    .execute(&conn)
+                {
+                    Ok(_con) => {
+                        last = count + 1 == threshold as i32;
+                        signature_count = count.clone() + 1;
+                        println!(
+                            "update withdraw db finished, last:{:?}, current signature:{:?}",
+                            last, signature_count
+                        );
+                        break;
+                    }
+                    Err(_) => println!(
+                        "current sig_count:{:?}, failed to update withdraw, try again...",
+                        count
+                    ),
+                }
+                thread::sleep(time::Duration::from_secs(1));
             }
-            println!("[+] Create withdraw transaction finished")
+
+            if finished {
+                let call_hash = get_withdraw_call_hash(&subxt_client).await?;
+                let _ = wait_transfer_finished(&subxt_client, multi_account_id.clone(), call_hash)
+                    .await?;
+                println!("signature is enough, no need to create transaction.");
+            } else if last {
+                let call_hash = do_last_withdraw(
+                    others.clone(),
+                    multi_account_id.clone(),
+                    &subxt_client,
+                    &signer,
+                )
+                .await?;
+                let _ = wait_transfer_finished(&subxt_client, multi_account_id.clone(), call_hash)
+                    .await?;
+
+                // the second wallet nee to update withdraw db
+                // todo use all client to deal with withdraw work
+                let withdraw_created = Withdraw {
+                    idx: current_withdraw_index.clone(),
+                    state: "created".to_string(),
+                    sig_count: Some(signature_count),
+                    height: Some(0),
+                    created_at: Utc::now().naive_utc(),
+                };
+                match update(withdraw.filter(idx.eq(current_withdraw_index.clone())))
+                    .set(&withdraw_created)
+                    .execute(&conn)
+                {
+                    Ok(_con) => println!("update withdraw db finished"),
+                    Err(_) => println!("failed to update withdraw"),
+                }
+                println!("[+] Create withdraw transaction finished")
+            } else {
+                // todo do middle_withdraw
+                let call_hash = do_last_withdraw(
+                    others.clone(),
+                    multi_account_id.clone(),
+                    &subxt_client,
+                    &signer,
+                )
+                .await?;
+                let _ = wait_transfer_finished(&subxt_client, multi_account_id.clone(), call_hash)
+                    .await?;
+                println!(
+                    "[+] Create withdraw transaction count:{:?}",
+                    signature_count
+                )
+            }
         }
-        //task::block_on(do_middle_withdraw());
     }
 }
 
@@ -229,6 +301,7 @@ pub(crate) async fn do_last_withdraw(
         heiko::api::multisig_call_hash(subxt_client, sudo_call.clone()).map_err(|_e| {
             Error::SubxtError(SubError::Other("failed to load get call hash".to_string()))
         })?;
+
     // let when = get_time_point::<HeikoRuntime>(subxt_client, account_id.clone(), call_hash).await;
     let when = get_last_withdraw_time_point::<HeikoRuntime>(
         subxt_client,
@@ -276,6 +349,34 @@ pub(crate) async fn get_last_withdraw_time_point<T: Runtime + Multisig>(
         }
         thread::sleep(time::Duration::from_secs(1));
     }
+}
+
+pub(crate) async fn get_withdraw_call_hash(
+    subxt_client: &Client<HeikoRuntime>,
+) -> Result<[u8; 32], Error> {
+    println!("[+] Crate last withdraw transaction");
+    println!("---------- start create multi-signature transaction ----------");
+    // 1.1 construct balance transfer call
+    // todo change blances_transfer to withdraw
+    let dest = AccountKeyring::Eve.to_account_id().into();
+    let inner_call =
+        heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(dest, MIN_POOL_BALANCE);
+
+    let inner_call_encoded = subxt_client
+        .encode(inner_call)
+        .map_err(|e| Error::SubxtError(e))?;
+    let sudo_call = sudo::SudoCall::<HeikoRuntime> {
+        _runtime: PhantomData,
+        call: &inner_call_encoded,
+    };
+
+    // check if timepoint already exist.
+    let call_hash =
+        heiko::api::multisig_call_hash(subxt_client, sudo_call.clone()).map_err(|_e| {
+            Error::SubxtError(SubError::Other("failed to load get call hash".to_string()))
+        })?;
+
+    Ok(call_hash)
 }
 
 pub(crate) async fn wait_transfer_finished(

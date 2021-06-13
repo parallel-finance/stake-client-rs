@@ -2,7 +2,6 @@ use crate::primitives::{AccountId, MIN_POOL_BALANCE};
 pub use parallel_primitives::CurrencyId;
 use runtime::heiko;
 use runtime::heiko::runtime::HeikoRuntime;
-use sp_core::crypto::Ss58Codec;
 use std::{thread, time};
 use substrate_subxt::Client;
 
