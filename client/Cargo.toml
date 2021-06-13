@@ -40,6 +40,7 @@ env_logger = "0.8.3"
 db          = { package = 'db', path = '../db' }
 runtime     = { package = 'runtime', path = '../runtime' }
 orml-tokens = { git = 'https://github.com/open-web3-stack/open-runtime-module-library.git', default-features = false }
+frame-support    = { git = 'https://github.com/paritytech/substrate.git', branch = 'polkadot-v0.9.3', default-features = false, version = '3.0.0' }
 
 [features]
 default = ['std']

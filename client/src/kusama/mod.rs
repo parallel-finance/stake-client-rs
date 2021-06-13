@@ -1,6 +1,6 @@
 mod listener;
 mod tasks;
-mod transaction;
+pub mod transaction;
 use crate::error::Error;
 use crate::primitives::AccountId;
 use futures::join;

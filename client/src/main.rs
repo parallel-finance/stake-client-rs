@@ -14,12 +14,15 @@ mod wallet;
 use config::Config;
 use crypto::*;
 use db::executor::DbExecutor;
+use frame_support::sp_runtime::traits::AccountIdConversion;
+use frame_support::PalletId;
 use lazy_static::lazy_static;
 use log::info;
 use primitives::AccountId;
 use std::fs;
 use tasks::start_withdraw_task;
 use wallet::*;
+
 lazy_static! {
     pub static ref CFG: Config =
         { Config::from_file("Config.toml").unwrap_or_else(|_| std::process::exit(1)) };
@@ -55,17 +58,27 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let ws_server = matches.value_of("ws_server").unwrap();
             let pool_addr = matches.value_of("pool_addr").unwrap();
 
+            let account_id: AccountId = PalletId(*b"par/stak").into_account();
+            println!("palletId address:{}", account_id.to_string());
+
             // get keystore
             let keystore = get_keystore(file.to_string()).unwrap();
             println!("{:?}", keystore);
 
             // get pair
-            let password = rpassword::read_password_from_tty(Some("Input password:")).ok();
+            let password = rpassword::read_password_from_tty(Some("Type password:")).ok();
             let pair = keystore.into_pair::<Sr25519>(password).unwrap();
 
             // get other signatories
             let other_signatories = keystore.get_other_signatories().unwrap();
-            let r = start_withdraw_task(pair, other_signatories, ws_server, pool_addr).await;
+            let r = start_withdraw_task(
+                pair,
+                other_signatories,
+                ws_server,
+                &account_id.to_string(),
+                &keystore.multi_address,
+            )
+            .await;
             println!("start_withdraw_task finished:{:?}", r);
         }
 
@@ -134,26 +147,24 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             }
 
             // create multi signature keystore
-            let mut seed: String = "".to_string();
-            if let Some(s) = rpassword::read_password_from_tty(Some("Input seed:")).ok() {
-                seed = s;
+            if let Some(seed) = rpassword::read_password_from_tty(Some("Type seed:")).ok() {
+                let password = rpassword::read_password_from_tty(Some("Type password:")).ok();
+                let keystore = create_keystore(
+                    password,
+                    threshold.to_string().parse().unwrap(),
+                    seed,
+                    other_addresses,
+                )?;
+
+                // create keystore file
+                let file_name = format!("{}.json", name);
+                if let Err(e) = fs::write(file_name.clone(), keystore.to_json()) {
+                    println!("failed to write to file: {:?}", e);
+                } else {
+                    println!("keystore file created: {}\n{:?}", file_name, keystore);
+                }
             } else {
                 println!("invalid seed")
-            }
-            let password = rpassword::read_password_from_tty(Some("Set password: ")).ok();
-            let keystore = create_keystore(
-                password,
-                threshold.to_string().parse().unwrap(),
-                seed,
-                other_addresses,
-            )?;
-
-            // create keystore file
-            let file_name = format!("{}.json", name);
-            if let Err(e) = fs::write(file_name.clone(), keystore.to_json()) {
-                println!("failed to write to file: {:?}", e);
-            } else {
-                println!("keystore file created: {}\n{:?}", file_name, keystore);
             }
         }
 
