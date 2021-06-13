@@ -18,6 +18,7 @@ use frame_support::sp_runtime::traits::AccountIdConversion;
 use frame_support::PalletId;
 use lazy_static::lazy_static;
 use log::info;
+use parallel_primitives::CurrencyId;
 use primitives::AccountId;
 use std::fs;
 use tasks::start_withdraw_task;
@@ -56,8 +57,8 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             println!("start client ...");
             let file = matches.value_of("file").unwrap();
             let ws_server = matches.value_of("ws_server").unwrap();
-            let pool_addr = matches.value_of("pool_addr").unwrap();
-
+            // current 'pool_addr' is not used
+            let _pool_addr = matches.value_of("pool_addr").unwrap();
             let account_id: AccountId = PalletId(*b"par/stak").into_account();
             println!("palletId address:{}", account_id.to_string());
 
@@ -77,6 +78,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 ws_server,
                 &account_id.to_string(),
                 &keystore.multi_address,
+                CurrencyId::KSM,
             )
             .await;
             println!("start_withdraw_task finished:{:?}", r);

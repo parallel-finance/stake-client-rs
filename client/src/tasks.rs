@@ -36,6 +36,7 @@ pub(crate) async fn start_withdraw_task(
     ws_server: &str,
     pool_addr: &str,
     multi_addr: &str,
+    currency_id: CurrencyId,
 ) -> Result<(), Error> {
     // initialize heiko related api
     let subxt_client = ClientBuilder::<HeikoRuntime>::new()
@@ -48,13 +49,16 @@ pub(crate) async fn start_withdraw_task(
             Error::SubxtError(e)
         })?;
 
-    let mut current_withdraw_index: i32 = 0;
+    let mut current_withdraw_index: i32;
     let conn = DB.get_connection().map_err(|e| {
         println!("failed to connect DB, error: {:?}", e);
         Error::SubxtError(SubError::Other("failed to connect DB".to_string()))
     })?;
 
     let multi_account_id = AccountId::from_string(multi_addr)
+        .map_err(|_| SubError::Other("invalid pool address".to_string()))?;
+
+    let pool_account_id = AccountId::from_string(pool_addr)
         .map_err(|_| SubError::Other("invalid pool address".to_string()))?;
 
     let r = withdraw.load::<Withdraw>(&conn).map_err(|e| {
@@ -67,7 +71,7 @@ pub(crate) async fn start_withdraw_task(
         // call_hash query db
         // exist &&
         current_withdraw_index = r.len() as i32;
-        let creating: bool;
+        let mut creating: bool = false;
         if current_withdraw_index != 0 {
             println!("last withdraw record:{:?}", r[r.len() - 1]);
             if r[r.len() - 1].state == "creating".to_string() {
@@ -76,13 +80,29 @@ pub(crate) async fn start_withdraw_task(
         }
         println!("current index:{}", current_withdraw_index);
 
+        let mut balance_enough: bool = false;
+        if let Some(balance) = get_pool_balances(
+            subxt_client.clone(),
+            pool_account_id.clone(),
+            currency_id.clone(),
+        )
+        .await
+        {
+            if balance > MIN_POOL_BALANCE {
+                balance_enough = true
+            }
+        }
+
+        if balance_enough && creating {
+            current_withdraw_index = current_withdraw_index - 1;
+        }
+
         println!("[+] Listen to pool's balance");
         // todo check state, finished?
         let _ = listen_pool_balances(
             subxt_client.clone(),
-            ws_server.clone(),
-            pool_addr.clone(),
-            CurrencyId::KSM,
+            pool_account_id.clone(),
+            currency_id.clone(),
         )
         .await;
 
@@ -281,4 +301,27 @@ pub(crate) async fn wait_transfer_finished(
             break Ok(());
         }
     }
+}
+
+async fn get_pool_balances(
+    subxt_client: Client<HeikoRuntime>,
+    pool_account_id: AccountId,
+    currency_id: CurrencyId,
+) -> Option<u128> {
+    let store = heiko::api::AccountsStore::<HeikoRuntime> {
+        account: pool_account_id,
+        currency_id,
+    };
+    let r = subxt_client
+        .fetch(&store, None)
+        .await
+        .map_err(|_| println!("failed to fetch tokens.accounts"))
+        .ok();
+
+    if let Some(Some(account_info)) = r {
+        let balance = account_info.free - account_info.frozen;
+        return Some(balance);
+    }
+
+    None
 }

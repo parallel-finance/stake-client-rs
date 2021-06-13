@@ -9,13 +9,11 @@ use substrate_subxt::Client;
 /// listen to the balance change of pool
 pub(crate) async fn listen_pool_balances(
     subxt_client: Client<HeikoRuntime>,
-    ws_server: &str,
-    pool_addr: &str,
+    pool_account_id: AccountId,
     currency_id: CurrencyId,
 ) -> Result<u128, String> {
-    let account_id = AccountId::from_string(pool_addr).map_err(|_| "invalid pool address")?;
     let store = heiko::api::AccountsStore::<HeikoRuntime> {
-        account: account_id,
+        account: pool_account_id,
         currency_id,
     };
     loop {
