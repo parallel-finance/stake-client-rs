@@ -8,6 +8,7 @@ mod listener;
 mod pkcs8;
 mod primitives;
 mod tasks;
+mod tasks_para;
 // mod test;
 mod wallet;
 
@@ -22,6 +23,7 @@ use parallel_primitives::CurrencyId;
 use primitives::AccountId;
 use std::fs;
 use tasks::start_withdraw_task;
+use tasks_para::start_withdraw_task_para;
 use wallet::*;
 
 lazy_static! {
@@ -80,6 +82,40 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 &account_id.to_string(),
                 &keystore.multi_address,
                 CurrencyId::KSM,
+            )
+            .await;
+            println!("start_withdraw_task finished:{:?}", r);
+        }
+
+        ("startpara", Some(matches)) => {
+            println!("start client ...");
+            let file = matches.value_of("file").unwrap();
+            let ws_server = matches.value_of("ws_server").unwrap();
+            // current 'pool_addr' is not used
+            let pool_addr = matches.value_of("pool_addr").unwrap();
+            // let account_id: AccountId = PalletId(*b"par/stak").into_account();
+            // println!("palletId address:{}", account_id.to_string());
+            let first = matches.value_of("first").unwrap();
+
+            // get keystore
+            let keystore = get_keystore(file.to_string()).unwrap();
+            println!("{:?}", keystore);
+
+            // get pair
+            let password = rpassword::read_password_from_tty(Some("Type password:")).ok();
+            let pair = keystore.into_pair::<Sr25519>(password).unwrap();
+
+            // get other signatories
+            let other_signatories = keystore.get_other_signatories().unwrap();
+            let r = start_withdraw_task_para(
+                keystore.threshold,
+                pair,
+                other_signatories,
+                ws_server,
+                &pool_addr.to_string(),
+                &keystore.multi_address,
+                CurrencyId::KSM,
+                first == "true",
             )
             .await;
             println!("start_withdraw_task finished:{:?}", r);

@@ -1,4 +1,4 @@
-use crate::primitives::{AccountId, MIN_WITHDRAW_BALANCE, MAX_WITHDRAW_BALANCE};
+use crate::primitives::{AccountId, MAX_WITHDRAW_BALANCE, MIN_WITHDRAW_BALANCE};
 pub use parallel_primitives::CurrencyId;
 use runtime::heiko;
 use runtime::heiko::runtime::HeikoRuntime;
@@ -31,7 +31,7 @@ pub(crate) async fn listen_pool_balances(
                     MIN_WITHDRAW_BALANCE
                 );
                 if balance < MAX_WITHDRAW_BALANCE {
-                    return Ok(balance)
+                    return Ok(balance);
                 }
                 return Ok(MAX_WITHDRAW_BALANCE);
             }

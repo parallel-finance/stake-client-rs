@@ -30,6 +30,16 @@ pub fn get_app<'a, 'b>() -> App<'a, 'b> {
             <pool_addr>  'The address of pool in para chain'
             ",
                 ),
+            SubCommand::with_name("startpara")
+                .about("Start client")
+                .args_from_usage(
+                    "
+            <file>  'The keystore filename with path'
+            <ws_server>  'The ws server url'
+            <pool_addr>  'The address of pool in para chain'
+            <first>  'temp use, first to create withdraw transaction'
+            ",
+                ),
             SubCommand::with_name("getaddress").about("Print account address"),
             SubCommand::with_name("getmultiaddress")
                 .about("Print multi signature account addresses"),

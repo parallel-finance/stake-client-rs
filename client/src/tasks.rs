@@ -100,7 +100,8 @@ pub(crate) async fn start_withdraw_task(
             pool_account_id.clone(),
             currency_id.clone(),
         )
-        .await{
+        .await
+        {
             Ok(a) => amount = a,
             Err(_) => continue,
         }
@@ -123,7 +124,8 @@ pub(crate) async fn start_withdraw_task(
 
         let signer = PairSigner::<HeikoRuntime, Pair>::new(pair.clone());
         if first {
-            let call_hash = do_first_withdraw(others.clone(), &subxt_client, &signer, amount).await?;
+            let call_hash =
+                do_first_withdraw(others.clone(), &subxt_client, &signer, amount).await?;
             let _ =
                 wait_transfer_finished(&subxt_client, multi_account_id.clone(), call_hash).await?;
             println!("[+] Create withdraw transaction finished")
@@ -248,8 +250,7 @@ pub(crate) async fn do_first_withdraw(
     // 1.1 construct balance transfer call
     // todo change balances_transfer to withdraw
     let dest = AccountKeyring::Eve.to_account_id().into();
-    let inner_call =
-        heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(dest, amount);
+    let inner_call = heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(dest, amount);
     let inner_call_encoded = subxt_client
         .encode(inner_call)
         .map_err(|e| Error::SubxtError(e))?;
@@ -293,8 +294,7 @@ pub(crate) async fn do_last_withdraw(
     // 1.1 construct balance transfer call
     // todo change blances_transfer to withdraw
     let dest = AccountKeyring::Eve.to_account_id().into();
-    let inner_call =
-        heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(dest, amount);
+    let inner_call = heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(dest, amount);
 
     let inner_call_encoded = subxt_client
         .encode(inner_call)
@@ -412,7 +412,7 @@ pub(crate) async fn wait_transfer_finished(
     }
 }
 
-async fn get_pool_balances(
+pub(crate) async fn get_pool_balances(
     subxt_client: Client<HeikoRuntime>,
     pool_account_id: AccountId,
     currency_id: CurrencyId,
