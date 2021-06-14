@@ -1,4 +1,4 @@
-use crate::primitives::{AccountId, MIN_POOL_BALANCE};
+use crate::primitives::{AccountId, MIN_WITHDRAW_BALANCE, MAX_WITHDRAW_BALANCE};
 pub use parallel_primitives::CurrencyId;
 use runtime::heiko;
 use runtime::heiko::runtime::HeikoRuntime;
@@ -25,12 +25,15 @@ pub(crate) async fn listen_pool_balances(
 
         if let Some(account_info) = r {
             let balance = account_info.free - account_info.frozen;
-            if balance >= MIN_POOL_BALANCE {
+            if balance >= MIN_WITHDRAW_BALANCE {
                 println!(
                     "[+] Pool's amount is {:?}， need to withdraw",
-                    MIN_POOL_BALANCE
+                    MIN_WITHDRAW_BALANCE
                 );
-                return Ok(MIN_POOL_BALANCE);
+                if balance < MAX_WITHDRAW_BALANCE {
+                    return Ok(balance)
+                }
+                return Ok(MAX_WITHDRAW_BALANCE);
             }
         }
     }

@@ -1,5 +1,5 @@
 use crate::listener::listen_pool_balances;
-use crate::primitives::{AccountId, MIN_POOL_BALANCE};
+use crate::primitives::{AccountId, MIN_WITHDRAW_BALANCE};
 
 use crate::DB;
 use chrono::Utc;
@@ -83,7 +83,7 @@ pub(crate) async fn start_withdraw_task(
         )
         .await
         {
-            if balance > MIN_POOL_BALANCE {
+            if balance > MIN_WITHDRAW_BALANCE {
                 balance_enough = true
             }
         }
@@ -94,12 +94,16 @@ pub(crate) async fn start_withdraw_task(
 
         println!("[+] Listen to pool's balance");
         // todo check state, finished?
-        let _ = listen_pool_balances(
+        let amount: u128;
+        match listen_pool_balances(
             subxt_client.clone(),
             pool_account_id.clone(),
             currency_id.clone(),
         )
-        .await;
+        .await{
+            Ok(a) => amount = a,
+            Err(_) => continue,
+        }
 
         let withdraw_creating = Withdraw {
             idx: current_withdraw_index.clone(),
@@ -119,7 +123,7 @@ pub(crate) async fn start_withdraw_task(
 
         let signer = PairSigner::<HeikoRuntime, Pair>::new(pair.clone());
         if first {
-            let call_hash = do_first_withdraw(others.clone(), &subxt_client, &signer).await?;
+            let call_hash = do_first_withdraw(others.clone(), &subxt_client, &signer, amount).await?;
             let _ =
                 wait_transfer_finished(&subxt_client, multi_account_id.clone(), call_hash).await?;
             println!("[+] Create withdraw transaction finished")
@@ -187,6 +191,7 @@ pub(crate) async fn start_withdraw_task(
                     multi_account_id.clone(),
                     &subxt_client,
                     &signer,
+                    amount,
                 )
                 .await?;
                 let _ = wait_transfer_finished(&subxt_client, multi_account_id.clone(), call_hash)
@@ -216,6 +221,7 @@ pub(crate) async fn start_withdraw_task(
                     multi_account_id.clone(),
                     &subxt_client,
                     &signer,
+                    amount,
                 )
                 .await?;
                 let _ = wait_transfer_finished(&subxt_client, multi_account_id.clone(), call_hash)
@@ -234,6 +240,7 @@ pub(crate) async fn do_first_withdraw(
     others: Vec<AccountId>,
     subxt_client: &Client<HeikoRuntime>,
     signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
+    amount: u128,
 ) -> Result<[u8; 32], Error> {
     println!("[+] Create first withdraw transaction");
 
@@ -242,7 +249,7 @@ pub(crate) async fn do_first_withdraw(
     // todo change balances_transfer to withdraw
     let dest = AccountKeyring::Eve.to_account_id().into();
     let inner_call =
-        heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(dest, MIN_POOL_BALANCE);
+        heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(dest, amount);
     let inner_call_encoded = subxt_client
         .encode(inner_call)
         .map_err(|e| Error::SubxtError(e))?;
@@ -279,6 +286,7 @@ pub(crate) async fn do_last_withdraw(
     multi_account_id: AccountId,
     subxt_client: &Client<HeikoRuntime>,
     signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
+    amount: u128,
 ) -> Result<[u8; 32], Error> {
     println!("[+] Crate last withdraw transaction");
     println!("---------- start create multi-signature transaction ----------");
@@ -286,7 +294,7 @@ pub(crate) async fn do_last_withdraw(
     // todo change blances_transfer to withdraw
     let dest = AccountKeyring::Eve.to_account_id().into();
     let inner_call =
-        heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(dest, MIN_POOL_BALANCE);
+        heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(dest, amount);
 
     let inner_call_encoded = subxt_client
         .encode(inner_call)
@@ -360,7 +368,7 @@ pub(crate) async fn get_withdraw_call_hash(
     // todo change blances_transfer to withdraw
     let dest = AccountKeyring::Eve.to_account_id().into();
     let inner_call =
-        heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(dest, MIN_POOL_BALANCE);
+        heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(dest, MIN_WITHDRAW_BALANCE);
 
     let inner_call_encoded = subxt_client
         .encode(inner_call)
