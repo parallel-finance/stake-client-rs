@@ -26,10 +26,7 @@ pub(crate) async fn listen_pool_balances(
         if let Some(account_info) = r {
             let balance = account_info.free - account_info.frozen;
             if balance >= MIN_WITHDRAW_BALANCE {
-                println!(
-                    "[+] Pool's amount is {:?}， need to withdraw",
-                    MIN_WITHDRAW_BALANCE
-                );
+                println!("[+] Pool's amount is {:?}， need to withdraw", balance);
                 if balance < MAX_WITHDRAW_BALANCE {
                     return Ok(balance);
                 }

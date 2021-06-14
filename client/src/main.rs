@@ -90,7 +90,8 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         ("startpara", Some(matches)) => {
             println!("start client ...");
             let file = matches.value_of("file").unwrap();
-            let ws_server = matches.value_of("ws_server").unwrap();
+            let para_ws_server = matches.value_of("para_ws_server").unwrap();
+            let relay_ws_server = matches.value_of("relay_ws_server").unwrap();
             // current 'pool_addr' is not used
             let pool_addr = matches.value_of("pool_addr").unwrap();
             // let account_id: AccountId = PalletId(*b"par/stak").into_account();
@@ -111,7 +112,8 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 keystore.threshold,
                 pair,
                 other_signatories,
-                ws_server,
+                para_ws_server,
+                relay_ws_server,
                 &pool_addr.to_string(),
                 &keystore.multi_address,
                 CurrencyId::KSM,

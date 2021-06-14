@@ -35,7 +35,8 @@ pub fn get_app<'a, 'b>() -> App<'a, 'b> {
                 .args_from_usage(
                     "
             <file>  'The keystore filename with path'
-            <ws_server>  'The ws server url'
+            <relay_ws_server>  'The relay ws server url'
+            <para_ws_server>  'The para ws server url'
             <pool_addr>  'The address of pool in para chain'
             <first>  'temp use, first to create withdraw transaction'
             ",
