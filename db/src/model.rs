@@ -12,6 +12,8 @@ pub struct Withdraw {
     pub idx: i32,
     pub state: String,
     pub created_at: NaiveDateTime,
+    pub height: Option<i32>,
+    pub sig_count: Option<i32>,
 }
 
 #[derive(
