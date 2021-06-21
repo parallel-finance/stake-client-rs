@@ -28,6 +28,7 @@ pub fn get_app<'a, 'b>() -> App<'a, 'b> {
             <file>  'The keystore filename with path'
             <ws_server>  'The ws server url'
             <pool_addr>  'The address of pool in para chain'
+            <password>   'The password'
             ",
                 ),
             SubCommand::with_name("startpara")
@@ -39,6 +40,7 @@ pub fn get_app<'a, 'b>() -> App<'a, 'b> {
             <para_ws_server>  'The para ws server url'
             <pool_addr>  'The address of pool in para chain'
             <first>  'temp use, first to create withdraw transaction'
+            <password>   'The password'
             ",
                 ),
             SubCommand::with_name("getaddress").about("Print account address"),
@@ -63,6 +65,7 @@ pub fn get_app<'a, 'b>() -> App<'a, 'b> {
             <para_ws_server>  'The para ws server url'
             <relay_pool_addr>  'The address of pool in relay chain'
             <first>  'temp use, first to create withdraw transaction'
+            <password>   'The password'
             ",
                 ),
         ])

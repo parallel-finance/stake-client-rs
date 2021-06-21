@@ -61,6 +61,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let ws_server = matches.value_of("ws_server").unwrap();
             // current 'pool_addr' is not used
             let _pool_addr = matches.value_of("pool_addr").unwrap();
+            let password = matches.value_of("password").unwrap();
             let account_id: AccountId = PalletId(*b"par/stak").into_account();
             println!("palletId address:{}", account_id.to_string());
 
@@ -69,8 +70,11 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             println!("{:?}", keystore);
 
             // get pair
-            let password = rpassword::read_password_from_tty(Some("Type password:")).ok();
-            let pair = keystore.into_pair::<Sr25519>(password).unwrap();
+
+            // let password = rpassword::read_password_from_tty(Some("Type password:")).ok();
+            let pair = keystore
+                .into_pair::<Sr25519>(Some(password.to_string()))
+                .unwrap();
 
             // get other signatories
             let other_signatories = keystore.get_other_signatories().unwrap();
@@ -97,14 +101,19 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             // let account_id: AccountId = PalletId(*b"par/stak").into_account();
             // println!("palletId address:{}", account_id.to_string());
             let first = matches.value_of("first").unwrap();
+            let password = matches.value_of("password").unwrap();
 
             // get keystore
             let keystore = get_keystore(file.to_string()).unwrap();
             println!("{:?}", keystore);
 
             // get pair
-            let password = rpassword::read_password_from_tty(Some("Type password:")).ok();
-            let pair = keystore.into_pair::<Sr25519>(password).unwrap();
+            // let password = rpassword::read_password_from_tty(Some("Type password:")).ok();
+            // let pair = keystore.into_pair::<Sr25519>(password).unwrap();
+            // let password = rpassword::read_password_from_tty(Some("Type password:")).ok();
+            let pair = keystore
+                .into_pair::<Sr25519>(Some(password.to_string()))
+                .unwrap();
 
             // get other signatories
             let other_signatories = keystore.get_other_signatories().unwrap();
@@ -136,14 +145,18 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 .value_of("relay_pool_addr")
                 .unwrap_or_else(|| "5DjYJStmdZ2rcqXbXGX7TW85JsrW6uG4y9MUcLq2BoPMpRA7");
             let first = matches.value_of("first").unwrap();
+            let password = matches.value_of("password").unwrap();
 
             // get keystore
             let keystore = get_keystore(file.to_string()).unwrap();
             info!("{:?}", keystore);
 
             // get pair
-            let password = rpassword::read_password_from_tty(Some("Input password:")).ok();
-            let pair = keystore.into_pair::<Sr25519>(password).unwrap();
+            // let password = rpassword::read_password_from_tty(Some("Input password:")).ok();
+            // let pair = keystore.into_pair::<Sr25519>(password).unwrap();
+            let pair = keystore
+                .into_pair::<Sr25519>(Some(password.to_string()))
+                .unwrap();
 
             // get other signatories
             let other_signatories = keystore.get_other_signatories().unwrap();
