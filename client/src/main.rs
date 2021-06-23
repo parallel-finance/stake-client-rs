@@ -12,6 +12,7 @@ mod tasks_para;
 // mod test;
 mod wallet;
 
+use crate::tasks_para::run;
 use config::Config;
 use crypto::*;
 use db::executor::DbExecutor;
@@ -23,7 +24,6 @@ use parallel_primitives::CurrencyId;
 use primitives::AccountId;
 use std::fs;
 use tasks::start_withdraw_task;
-use tasks_para::start_withdraw_task_para;
 use wallet::*;
 
 lazy_static! {
@@ -117,7 +117,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
             // get other signatories
             let other_signatories = keystore.get_other_signatories().unwrap();
-            let r = start_withdraw_task_para(
+            let r = run(
                 keystore.threshold,
                 pair,
                 other_signatories,

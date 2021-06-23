@@ -2,6 +2,15 @@ use codec::{Decode, Encode};
 use core::marker::PhantomData;
 use substrate_subxt::balances::Balances;
 
+/// Unstaked event.
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct UnstakedEvent<T: LiquidStaking> {
+    /// Account who unstake.
+    pub account: T::AccountId,
+    /// Amount of balance that will unstaked.
+    pub amount: T::Balance,
+}
+
 #[derive(Encode, Decode, Copy, Clone, Debug, Default, Store)]
 pub struct TotalStakingAssetStore<T: LiquidStaking> {
     #[store(returns = T::Balance)]
