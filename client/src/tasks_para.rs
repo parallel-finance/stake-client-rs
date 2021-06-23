@@ -2,7 +2,6 @@ use crate::listener;
 use crate::primitives::{AccountId, Amount, TasksType};
 use crate::tasks::{do_first_withdraw, do_last_withdraw, wait_transfer_finished};
 
-use async_std::task;
 use futures::join;
 use parallel_primitives::CurrencyId;
 use runtime::error::Error;
@@ -14,6 +13,7 @@ use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
 use std::time;
 use substrate_subxt::{Client, ClientBuilder, PairSigner};
 use substrate_subxt::{Error as SubError, Signer};
+use tokio::{task, sync::{mpsc, oneshot}};
 
 const FROM_RELAY_CHAIN_SEED: &str = "//Alice";
 const TO_REPLAY_CHAIN_ADDRESS: &str = "5DjYJStmdZ2rcqXbXGX7TW85JsrW6uG4y9MUcLq2BoPMpRA7";
@@ -51,7 +51,7 @@ pub async fn run(
     let para_signer = PairSigner::<HeikoRuntime, sp_core::sr25519::Pair>::new(pair.clone());
 
     // initial channel
-    let (system_rpc_tx, system_rpc_rx) = tracing_unbounded::<TasksType>("mpsc_system_rpc");
+    let (system_rpc_tx, system_rpc_rx) = mpsc::channel::<(TasksType, oneshot::Sender<u64>)>(5);
 
     // initial multi threads to listen on-chain status
     let l = listener::listener(
@@ -77,7 +77,7 @@ pub async fn run(
 }
 
 pub async fn dispatch(
-    mut system_rpc_rx: TracingUnboundedReceiver<TasksType>,
+    mut system_rpc_rx: mpsc::Receiver<(TasksType, oneshot::Sender<u64>)>,
     para_subxt_client: &Client<HeikoRuntime>,
     rely_subxt_client: &Client<RelayRuntime>,
     para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
@@ -87,11 +87,9 @@ pub async fn dispatch(
     first: bool,
 ) {
     loop {
-        // try_next won't go on util finish this task
-        match system_rpc_rx.try_next() {
-            Ok(some_tasks_type) => {
-                if let Some(tasks_type) = some_tasks_type {
-                    match tasks_type {
+        match system_rpc_rx.recv().await {
+            Some((task_type, response)) => {
+                    match task_type {
                         TasksType::ParaStake(amount) => {
                             let _ = start_withdraw_task_para(
                                 &para_subxt_client,
@@ -103,8 +101,9 @@ pub async fn dispatch(
                                 first.clone(),
                                 amount.clone(),
                             )
-                            .await
-                            .map_err(|e| println!("error do_last_para_record_rewards: {:?}", e));
+                                .await
+                                .map_err(|e| println!("error start_withdraw_task_para: {:?}", e));
+                            response.send(0).unwrap();
                         }
                         TasksType::ParaUnstake(_amount) => {
                             // relay_bond_extra(
@@ -115,16 +114,13 @@ pub async fn dispatch(
                             //     first,
                             // ).await
                             //     .map_err(|e| println!("error do_last_para_record_rewards: {:?}", e));
-                            println!("[+] Unstaked");
+                            response.send(0).unwrap();
                         }
                     }
-                } else {
-                    println!("no task type");
-                }
             }
-            Err(_e) => println!("dispatch pending..."),
+            None => println!("dispatch pending..."),
         }
-        task::sleep(time::Duration::from_secs(TASK_INTERVAL)).await;
+        // task::sleep(time::Duration::from_secs(TASK_INTERVAL)).await;
     }
 }
 
@@ -139,7 +135,6 @@ pub(crate) async fn start_withdraw_task_para(
     first: bool,
     amount: Amount,
 ) -> Result<(), Error> {
-    loop {
         if first {
             let call_hash = do_first_withdraw(
                 others.clone(),
@@ -151,7 +146,7 @@ pub(crate) async fn start_withdraw_task_para(
             .await?;
             let _ = wait_transfer_finished(&para_subxt_client, multi_account_id.clone(), call_hash)
                 .await?;
-            println!("[+] Create withdraw transaction finished")
+            println!("[+] Create withdraw transaction finished");
         } else {
             let call_hash = do_last_withdraw(
                 others.clone(),
@@ -168,8 +163,9 @@ pub(crate) async fn start_withdraw_task_para(
 
             // todo transfer relay chain amount from one address to other
             let _ = transfer_relay_chain_balance(&relay_subxt_client, amount.clone()).await?;
+            println!("[+] Create mock relay transaction finished");
         }
-    }
+    Ok(())
 }
 
 async fn transfer_relay_chain_balance(

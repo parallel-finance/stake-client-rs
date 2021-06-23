@@ -9,10 +9,11 @@ use sp_utils::mpsc::TracingUnboundedSender;
 use std::time;
 use substrate_subxt::{Client, EventSubscription, RawEvent};
 use sp_core::Decode;
+use tokio::sync::{oneshot, mpsc};
 
 const LISTEN_INTERVAL: u64 = 5; // 5 sec
 pub async fn listener(
-    system_rpc_tx: TracingUnboundedSender<TasksType>,
+    system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
     para_subxt_client: &Client<HeikoRuntime>,
     pool_account_id: AccountId,
     currency_id: CurrencyId,
@@ -27,13 +28,12 @@ pub async fn listener(
         system_rpc_tx,
         para_subxt_client,
     );
-    println!("listener join");
     join!(l1, l2);
 }
 
 /// listen to the balance change of pool
 pub(crate) async fn listen_pool_balances(
-    system_rpc_tx: TracingUnboundedSender<TasksType>,
+    system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
     para_subxt_client: &Client<HeikoRuntime>,
     pool_account_id: AccountId,
     currency_id: CurrencyId,
@@ -49,14 +49,17 @@ pub(crate) async fn listen_pool_balances(
                     let balance = account_info.free - account_info.frozen;
                     if balance >= MIN_WITHDRAW_BALANCE {
                         println!("[+] Pool's amount is {:?}， need to withdraw", balance);
+                        let (resp_tx, resp_rx) = oneshot::channel();
                         if balance < MAX_WITHDRAW_BALANCE {
                             system_rpc_tx
                                 .clone()
-                                .start_send(TasksType::ParaStake(balance)).ok();
+                                .try_send((TasksType::ParaStake(balance), resp_tx)).ok();
+                            let _res = resp_rx.await.ok();
                         } else {
                             system_rpc_tx
                                 .clone()
-                                .start_send(TasksType::ParaStake(MAX_WITHDRAW_BALANCE)).ok();
+                                .try_send((TasksType::ParaStake(MAX_WITHDRAW_BALANCE), resp_tx)).ok();
+                            let _res = resp_rx.await.ok();
                         }
                     }
                 }
@@ -71,7 +74,7 @@ pub(crate) async fn listen_pool_balances(
 
 /// listen to the balance change of pool
 async fn listen_unstake_event(
-    mut system_rpc_tx: TracingUnboundedSender<TasksType>,
+    mut system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
     para_subxt_client: &Client<HeikoRuntime>,
 ) {
     let sub = para_subxt_client
@@ -82,7 +85,7 @@ async fn listen_unstake_event(
     let mut sub = EventSubscription::<HeikoRuntime>::new(sub, &decoder);
     sub.filter_event::<UnstakedEvent<_>>();
     loop {
-        println!("loop listen unstake event");
+        let (resp_tx, resp_rx) = oneshot::channel();
         let _ = sub
             .next()
             .await
@@ -91,10 +94,11 @@ async fn listen_unstake_event(
                 UnstakedEvent::<HeikoRuntime>::decode(&mut &raw.data[..]).ok()
             })
             .and_then(|event| -> Option<()> {
-                println!("Receive Event: {:?}", &event);
+                println!("[+] Received Unstaked event: {:?}", &event);
                 system_rpc_tx
-                    .start_send(TasksType::ParaUnstake(event.amount))
+                    .try_send((TasksType::ParaUnstake(event.amount), resp_tx))
                     .ok()
             });
+        let _res = resp_rx.await.ok();
     }
 }
