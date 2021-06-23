@@ -3,12 +3,13 @@ use crate::primitives::{AccountId, Amount, TasksType};
 use crate::tasks::{do_first_withdraw, do_last_withdraw, wait_transfer_finished};
 
 use futures::join;
-use parallel_primitives::CurrencyId;
+use parallel_primitives::{Balance, CurrencyId};
 use runtime::error::Error;
 use runtime::heiko::runtime::HeikoRuntime;
 use runtime::kusama::{self, runtime::KusamaRuntime as RelayRuntime};
 use sp_core::crypto::Ss58Codec;
 use sp_core::Pair;
+use substrate_subxt::system::System;
 use substrate_subxt::{Client, ClientBuilder, PairSigner};
 use substrate_subxt::{Error as SubError, Signer};
 use tokio::sync::{mpsc, oneshot};
@@ -30,6 +31,9 @@ pub async fn run(
     // initialize heiko related api
     let para_subxt_client = ClientBuilder::<HeikoRuntime>::new()
         .set_url(para_ws_server)
+        .register_type_size::<<HeikoRuntime as System>::AccountId>("T::AccountId")
+        .register_type_size::<CurrencyId>("CurrencyIdOf<T>")
+        .register_type_size::<Balance>("BalanceOf<T>")
         .skip_type_sizes_check()
         .build()
         .await
@@ -37,6 +41,7 @@ pub async fn run(
 
     let relay_subxt_client = ClientBuilder::<RelayRuntime>::new()
         .set_url(relay_ws_server)
+        .register_type_size::<<RelayRuntime as System>::AccountId>("T::AccountId")
         .skip_type_sizes_check()
         // .register_type_size::<([u8; 20])>("EthereumAddress")
         .build()

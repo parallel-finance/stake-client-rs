@@ -81,22 +81,24 @@ async fn listen_unstake_event(
         .unwrap();
     let decoder = para_subxt_client.events_decoder();
     let mut sub = EventSubscription::<HeikoRuntime>::new(sub, &decoder);
-    sub.filter_event::<UnstakedEvent<_>>();
+    sub.filter_event::<UnstakedEvent<HeikoRuntime>>();
     loop {
-        let (resp_tx, resp_rx) = oneshot::channel();
-        let _ = sub
+        match sub
             .next()
             .await
             .and_then(|result_raw| -> Option<RawEvent> { result_raw.ok() })
             .and_then(|raw| -> Option<UnstakedEvent<HeikoRuntime>> {
                 UnstakedEvent::<HeikoRuntime>::decode(&mut &raw.data[..]).ok()
-            })
-            .and_then(|event| -> Option<()> {
+            }) {
+            Some(event) => {
                 println!("[+] Received Unstaked event: {:?}", &event);
+                let (resp_tx, resp_rx) = oneshot::channel();
                 system_rpc_tx
                     .try_send((TasksType::ParaUnstake(event.amount), resp_tx))
-                    .ok()
-            });
-        let _res = resp_rx.await.ok();
+                    .ok();
+                let _res = resp_rx.await.ok();
+            }
+            None => {}
+        }
     }
 }
