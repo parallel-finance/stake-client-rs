@@ -5,11 +5,10 @@ pub use parallel_primitives::CurrencyId;
 use runtime::heiko;
 use runtime::heiko::runtime::HeikoRuntime;
 use runtime::pallets::liquid_staking::UnstakedEvent;
-use sp_utils::mpsc::TracingUnboundedSender;
+use sp_core::Decode;
 use std::time;
 use substrate_subxt::{Client, EventSubscription, RawEvent};
-use sp_core::Decode;
-use tokio::sync::{oneshot, mpsc};
+use tokio::sync::{mpsc, oneshot};
 
 const LISTEN_INTERVAL: u64 = 5; // 5 sec
 pub async fn listener(
@@ -24,10 +23,7 @@ pub async fn listener(
         pool_account_id.clone(),
         currency_id.clone(),
     );
-    let l2 = listen_unstake_event(
-        system_rpc_tx,
-        para_subxt_client,
-    );
+    let l2 = listen_unstake_event(system_rpc_tx, para_subxt_client);
     join!(l1, l2);
 }
 
@@ -53,12 +49,14 @@ pub(crate) async fn listen_pool_balances(
                         if balance < MAX_WITHDRAW_BALANCE {
                             system_rpc_tx
                                 .clone()
-                                .try_send((TasksType::ParaStake(balance), resp_tx)).ok();
+                                .try_send((TasksType::ParaStake(balance), resp_tx))
+                                .ok();
                             let _res = resp_rx.await.ok();
                         } else {
                             system_rpc_tx
                                 .clone()
-                                .try_send((TasksType::ParaStake(MAX_WITHDRAW_BALANCE), resp_tx)).ok();
+                                .try_send((TasksType::ParaStake(MAX_WITHDRAW_BALANCE), resp_tx))
+                                .ok();
                             let _res = resp_rx.await.ok();
                         }
                     }

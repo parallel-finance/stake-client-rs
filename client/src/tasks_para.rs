@@ -9,15 +9,12 @@ use runtime::heiko::runtime::HeikoRuntime;
 use runtime::kusama::{self, runtime::KusamaRuntime as RelayRuntime};
 use sp_core::crypto::Ss58Codec;
 use sp_core::Pair;
-use sp_utils::mpsc::{tracing_unbounded, TracingUnboundedReceiver};
-use std::time;
 use substrate_subxt::{Client, ClientBuilder, PairSigner};
 use substrate_subxt::{Error as SubError, Signer};
-use tokio::{task, sync::{mpsc, oneshot}};
+use tokio::sync::{mpsc, oneshot};
 
 const FROM_RELAY_CHAIN_SEED: &str = "//Alice";
 const TO_REPLAY_CHAIN_ADDRESS: &str = "5DjYJStmdZ2rcqXbXGX7TW85JsrW6uG4y9MUcLq2BoPMpRA7";
-const TASK_INTERVAL: u64 = 5; // 5 sec
 
 pub async fn run(
     threshold: u16,
@@ -89,38 +86,37 @@ pub async fn dispatch(
     loop {
         match system_rpc_rx.recv().await {
             Some((task_type, response)) => {
-                    match task_type {
-                        TasksType::ParaStake(amount) => {
-                            let _ = start_withdraw_task_para(
-                                &para_subxt_client,
-                                &rely_subxt_client,
-                                para_signer,
-                                multi_account_id.clone(),
-                                threshold.clone(),
-                                others.clone(),
-                                first.clone(),
-                                amount.clone(),
-                            )
-                                .await
-                                .map_err(|e| println!("error start_withdraw_task_para: {:?}", e));
-                            response.send(0).unwrap();
-                        }
-                        TasksType::ParaUnstake(_amount) => {
-                            // relay_bond_extra(
-                            //     subxt_relay_client,
-                            //     relay_signer,
-                            //     others.clone(),
-                            //     pool_addr.clone(),
-                            //     first,
-                            // ).await
-                            //     .map_err(|e| println!("error do_last_para_record_rewards: {:?}", e));
-                            response.send(0).unwrap();
-                        }
+                match task_type {
+                    TasksType::ParaStake(amount) => {
+                        let _ = start_withdraw_task_para(
+                            &para_subxt_client,
+                            &rely_subxt_client,
+                            para_signer,
+                            multi_account_id.clone(),
+                            threshold.clone(),
+                            others.clone(),
+                            first.clone(),
+                            amount.clone(),
+                        )
+                        .await
+                        .map_err(|e| println!("error start_withdraw_task_para: {:?}", e));
+                        response.send(0).unwrap();
                     }
+                    TasksType::ParaUnstake(_amount) => {
+                        // relay_bond_extra(
+                        //     subxt_relay_client,
+                        //     relay_signer,
+                        //     others.clone(),
+                        //     pool_addr.clone(),
+                        //     first,
+                        // ).await
+                        //     .map_err(|e| println!("error do_last_para_record_rewards: {:?}", e));
+                        response.send(0).unwrap();
+                    }
+                }
             }
             None => println!("dispatch pending..."),
         }
-        // task::sleep(time::Duration::from_secs(TASK_INTERVAL)).await;
     }
 }
 
@@ -135,36 +131,36 @@ pub(crate) async fn start_withdraw_task_para(
     first: bool,
     amount: Amount,
 ) -> Result<(), Error> {
-        if first {
-            let call_hash = do_first_withdraw(
-                others.clone(),
-                &para_subxt_client,
-                para_signer,
-                amount.clone(),
-                threshold.clone(),
-            )
-            .await?;
-            let _ = wait_transfer_finished(&para_subxt_client, multi_account_id.clone(), call_hash)
-                .await?;
-            println!("[+] Create withdraw transaction finished");
-        } else {
-            let call_hash = do_last_withdraw(
-                others.clone(),
-                multi_account_id.clone(),
-                &para_subxt_client,
-                para_signer,
-                amount.clone(),
-                threshold.clone(),
-            )
-            .await?;
-            let _ = wait_transfer_finished(&para_subxt_client, multi_account_id.clone(), call_hash)
-                .await?;
-            println!("[+] Create withdraw transaction finished");
+    if first {
+        let call_hash = do_first_withdraw(
+            others.clone(),
+            &para_subxt_client,
+            para_signer,
+            amount.clone(),
+            threshold.clone(),
+        )
+        .await?;
+        let _ =
+            wait_transfer_finished(&para_subxt_client, multi_account_id.clone(), call_hash).await?;
+        println!("[+] Create withdraw transaction finished");
+    } else {
+        let call_hash = do_last_withdraw(
+            others.clone(),
+            multi_account_id.clone(),
+            &para_subxt_client,
+            para_signer,
+            amount.clone(),
+            threshold.clone(),
+        )
+        .await?;
+        let _ =
+            wait_transfer_finished(&para_subxt_client, multi_account_id.clone(), call_hash).await?;
+        println!("[+] Create withdraw transaction finished");
 
-            // todo transfer relay chain amount from one address to other
-            let _ = transfer_relay_chain_balance(&relay_subxt_client, amount.clone()).await?;
-            println!("[+] Create mock relay transaction finished");
-        }
+        // todo transfer relay chain amount from one address to other
+        let _ = transfer_relay_chain_balance(&relay_subxt_client, amount.clone()).await?;
+        println!("[+] Create mock relay transaction finished");
+    }
     Ok(())
 }
 

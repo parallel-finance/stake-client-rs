@@ -261,10 +261,15 @@ pub(crate) async fn do_first_withdraw(
         call: &inner_call_encoded,
     };
 
-    let mc = heiko::api::multisig_approve_as_multi_call::<
-        HeikoRuntime,
-        sudo::SudoCall<HeikoRuntime>,
-    >(subxt_client, threshold, others, None, sudo_call.clone(), 0u64)?;
+    let mc =
+        heiko::api::multisig_approve_as_multi_call::<HeikoRuntime, sudo::SudoCall<HeikoRuntime>>(
+            subxt_client,
+            threshold,
+            others,
+            None,
+            sudo_call.clone(),
+            0u64,
+        )?;
 
     // 1.2 initial the multisg call
     let result = subxt_client.submit(mc, signer).await?;
