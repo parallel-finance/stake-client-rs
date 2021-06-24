@@ -14,6 +14,7 @@ use substrate_subxt::{Client, ClientBuilder, PairSigner};
 use substrate_subxt::{Error as SubError, Signer};
 use tokio::sync::{mpsc, oneshot};
 
+const RELAY_CHAIN_BOND_SEED: &str = "//Eve";
 const FROM_RELAY_CHAIN_SEED: &str = "//Alice";
 const TO_REPLAY_CHAIN_ADDRESS: &str = "5DjYJStmdZ2rcqXbXGX7TW85JsrW6uG4y9MUcLq2BoPMpRA7";
 
@@ -90,36 +91,29 @@ pub async fn dispatch(
 ) {
     loop {
         match system_rpc_rx.recv().await {
-            Some((task_type, response)) => {
-                match task_type {
-                    TasksType::ParaStake(amount) => {
-                        let _ = start_withdraw_task_para(
-                            &para_subxt_client,
-                            &rely_subxt_client,
-                            para_signer,
-                            multi_account_id.clone(),
-                            threshold.clone(),
-                            others.clone(),
-                            first.clone(),
-                            amount.clone(),
-                        )
+            Some((task_type, response)) => match task_type {
+                TasksType::ParaStake(amount) => {
+                    let _ = start_withdraw_task_para(
+                        &para_subxt_client,
+                        &rely_subxt_client,
+                        para_signer,
+                        multi_account_id.clone(),
+                        threshold.clone(),
+                        others.clone(),
+                        amount.clone(),
+                        first.clone(),
+                    )
+                    .await
+                    .map_err(|e| println!("error start_withdraw_task_para: {:?}", e));
+                    response.send(0).unwrap();
+                }
+                TasksType::ParaUnstake(amount) => {
+                    let _ = start_unstake_task(&rely_subxt_client, amount.clone(), first.clone())
                         .await
                         .map_err(|e| println!("error start_withdraw_task_para: {:?}", e));
-                        response.send(0).unwrap();
-                    }
-                    TasksType::ParaUnstake(_amount) => {
-                        // relay_bond_extra(
-                        //     subxt_relay_client,
-                        //     relay_signer,
-                        //     others.clone(),
-                        //     pool_addr.clone(),
-                        //     first,
-                        // ).await
-                        //     .map_err(|e| println!("error do_last_para_record_rewards: {:?}", e));
-                        response.send(0).unwrap();
-                    }
+                    response.send(0).unwrap();
                 }
-            }
+            },
             None => println!("dispatch pending..."),
         }
     }
@@ -133,8 +127,8 @@ pub(crate) async fn start_withdraw_task_para(
     multi_account_id: AccountId,
     threshold: u16,
     others: Vec<AccountId>,
-    first: bool,
     amount: Amount,
+    first: bool,
 ) -> Result<(), Error> {
     if first {
         let call_hash = do_first_withdraw(
@@ -193,6 +187,36 @@ async fn transfer_relay_chain_balance(
 
     println!(
         "[+] transfer_relay_chain_balance finished, replay chain call hash {:?}",
+        result
+    );
+    Ok(())
+}
+
+/// start withdraw task, ws_server: ws://127.0.0.1:9944
+pub(crate) async fn start_unstake_task(
+    relay_subxt_client: &Client<RelayRuntime>,
+    amount: Amount,
+    first: bool,
+) -> Result<(), Error> {
+    if first {
+        let _ = do_relay_unstake(&relay_subxt_client, amount.clone()).await?;
+    }
+    Ok(())
+}
+
+async fn do_relay_unstake(subxt_client: &Client<RelayRuntime>, amount: u128) -> Result<(), Error> {
+    println!("[+] Create relay chain unbond transaction");
+    let pair = sp_core::sr25519::Pair::from_string(&RELAY_CHAIN_BOND_SEED, None)
+        .map_err(|_err| SubError::Other("failed to create pair from seed".to_string()))?;
+    let signer = PairSigner::<RelayRuntime, sp_core::sr25519::Pair>::new(pair.clone());
+    let call = kusama::api::staking_unbond_call::<RelayRuntime>(amount);
+    let result = subxt_client.submit(call, &signer).await.map_err(|e| {
+        println!("{:?}", e);
+        SubError::Other("failed to create unbond transaction".to_string())
+    })?;
+
+    println!(
+        "[+] do_relay_unstake finished, replay chain call hash {:?}",
         result
     );
     Ok(())

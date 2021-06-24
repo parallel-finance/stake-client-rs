@@ -32,6 +32,12 @@ pub struct BondExtraCall<T: Staking> {
     pub max_additional: T::Balance,
 }
 
+#[derive(Call, Encode, Debug, Clone)]
+pub struct UnbondCall<T: Staking> {
+    #[codec(compact)]
+    pub value: T::Balance,
+}
+
 pub fn staking_bond_call<'a, T: Staking>(
     controller: &'a T::Address,
     value: T::Balance,
@@ -50,4 +56,8 @@ pub fn staking_nominate_call<'a, T: Staking>(targets: Vec<T::Address>) -> Nomina
 
 pub fn staking_bond_extra_call<T: Staking>(max_additional: T::Balance) -> BondExtraCall<T> {
     BondExtraCall::<T> { max_additional }
+}
+
+pub fn staking_unbond_call<T: Staking>(value: T::Balance) -> UnbondCall<T> {
+    UnbondCall::<T> { value }
 }
