@@ -2,9 +2,10 @@ use crate::primitives::{AccountId, TasksType, MAX_WITHDRAW_BALANCE, MIN_WITHDRAW
 use async_std::task;
 use futures::join;
 pub use parallel_primitives::CurrencyId;
-use runtime::heiko;
-use runtime::heiko::runtime::HeikoRuntime;
+use runtime::heiko::{self, runtime::HeikoRuntime};
+use runtime::kusama::runtime::KusamaRuntime as RelayRuntime;
 use runtime::pallets::liquid_staking::UnstakedEvent;
+use runtime::pallets::staking::UnbondedEvent;
 use sp_core::Decode;
 use std::time;
 use substrate_subxt::{Client, EventSubscription, RawEvent};
@@ -14,6 +15,7 @@ const LISTEN_INTERVAL: u64 = 5; // 5 sec
 pub async fn listener(
     system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
     para_subxt_client: &Client<HeikoRuntime>,
+    relay_subxt_client: &Client<RelayRuntime>,
     pool_account_id: AccountId,
     currency_id: CurrencyId,
 ) {
@@ -23,8 +25,9 @@ pub async fn listener(
         pool_account_id.clone(),
         currency_id.clone(),
     );
-    let l2 = listen_unstake_event(system_rpc_tx, para_subxt_client);
-    join!(l1, l2);
+    let l2 = listen_unstaked_event(system_rpc_tx.clone(), para_subxt_client);
+    let l3 = listen_unbonded_event(system_rpc_tx, relay_subxt_client);
+    join!(l1, l2, l3);
 }
 
 /// listen to the balance change of pool
@@ -70,8 +73,8 @@ pub(crate) async fn listen_pool_balances(
     }
 }
 
-/// listen to the balance change of pool
-async fn listen_unstake_event(
+/// listen to the unstaked event
+async fn listen_unstaked_event(
     mut system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
     para_subxt_client: &Client<HeikoRuntime>,
 ) {
@@ -94,7 +97,43 @@ async fn listen_unstake_event(
                 println!("[+] Received Unstaked event: {:?}", &event);
                 let (resp_tx, resp_rx) = oneshot::channel();
                 system_rpc_tx
-                    .try_send((TasksType::ParaUnstake(event.amount), resp_tx))
+                    .try_send((TasksType::ParaUnstake(event.account, event.amount), resp_tx))
+                    .ok();
+                let _res = resp_rx.await.ok();
+            }
+            None => {}
+        }
+    }
+}
+
+/// listen to the unbonded event
+async fn listen_unbonded_event(
+    mut system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
+    para_subxt_client: &Client<RelayRuntime>,
+) {
+    let sub = para_subxt_client
+        .subscribe_finalized_events()
+        .await
+        .unwrap();
+    let decoder = para_subxt_client.events_decoder();
+    let mut sub = EventSubscription::<RelayRuntime>::new(sub, &decoder);
+    sub.filter_event::<UnbondedEvent<RelayRuntime>>();
+    loop {
+        match sub
+            .next()
+            .await
+            .and_then(|result_raw| -> Option<RawEvent> { result_raw.ok() })
+            .and_then(|raw| -> Option<UnbondedEvent<RelayRuntime>> {
+                UnbondedEvent::<RelayRuntime>::decode(&mut &raw.data[..]).ok()
+            }) {
+            Some(event) => {
+                println!("[+] Received Unbonded event: {:?}", &event);
+                let (resp_tx, resp_rx) = oneshot::channel();
+                system_rpc_tx
+                    .try_send((
+                        TasksType::RelayUnbonded(event.account, event.amount),
+                        resp_tx,
+                    ))
                     .ok();
                 let _res = resp_rx.await.ok();
             }

@@ -21,9 +21,10 @@ pub const MIN_WITHDRAW_BALANCE: u128 = 100_000_000_000_000;
 /// The maximum balance of pool to withdraw.
 pub const MAX_WITHDRAW_BALANCE: u128 = 1000_000_000_000_000;
 
-/// The para-chain tasks type
+/// The tasks type
 pub enum TasksType {
     ParaStake(Amount),
-    ParaUnstake(Amount),
+    ParaUnstake(AccountId, Amount),
+    RelayUnbonded(AccountId, Amount),
 }
 pub type Amount = u128;

@@ -23,6 +23,15 @@ pub struct SlashEvent<T: Staking> {
     pub amount: T::Balance,
 }
 
+/// Unbonded event.
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct UnbondedEvent<T: Staking> {
+    /// Account has unbonded this amount.
+    pub account: T::AccountId,
+    /// Amount of balance that was unbonded.
+    pub amount: T::Balance,
+}
+
 #[module]
 pub trait Staking: SubxtStaking {}
 

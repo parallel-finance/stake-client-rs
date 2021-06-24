@@ -1,6 +1,9 @@
 use crate::listener;
 use crate::primitives::{AccountId, Amount, TasksType};
-use crate::tasks::{do_first_withdraw, do_last_withdraw, wait_transfer_finished};
+use crate::tasks::{
+    do_first_process_pending_unstake, do_first_withdraw, do_last_process_pending_unstake,
+    do_last_withdraw, wait_transfer_finished,
+};
 
 use futures::join;
 use parallel_primitives::{Balance, CurrencyId};
@@ -60,6 +63,7 @@ pub async fn run(
     let l = listener::listener(
         system_rpc_tx,
         &para_subxt_client,
+        &relay_subxt_client,
         pool_account_id.clone(),
         currency_id.clone(),
     );
@@ -89,6 +93,7 @@ pub async fn dispatch(
     others: Vec<AccountId>,
     first: bool,
 ) {
+    let mut unstake_list: Vec<(AccountId, Amount)> = vec![];
     loop {
         match system_rpc_rx.recv().await {
             Some((task_type, response)) => match task_type {
@@ -107,11 +112,36 @@ pub async fn dispatch(
                     .map_err(|e| println!("error start_withdraw_task_para: {:?}", e));
                     response.send(0).unwrap();
                 }
-                TasksType::ParaUnstake(amount) => {
+                TasksType::ParaUnstake(owner, amount) => {
                     let _ = start_unstake_task(&rely_subxt_client, amount.clone(), first.clone())
                         .await
                         .map_err(|e| println!("error start_withdraw_task_para: {:?}", e));
                     response.send(0).unwrap();
+                    unstake_list.push((owner, amount));
+                }
+                TasksType::RelayUnbonded(agent, amount) => {
+                    let mut index = 0;
+                    for (owner, a) in unstake_list.clone().into_iter() {
+                        if amount == a {
+                            let _ = start_process_pending_unstake_task_para(
+                                &para_subxt_client,
+                                para_signer,
+                                multi_account_id.clone(),
+                                threshold.clone(),
+                                others.clone(),
+                                agent,
+                                owner,
+                                amount,
+                                first.clone(),
+                            )
+                            .await
+                            .map_err(|e| println!("error start_withdraw_task_para: {:?}", e));
+                            response.send(0).unwrap();
+                            break;
+                        }
+                        index = index + 1
+                    }
+                    unstake_list.remove(index);
                 }
             },
             None => println!("dispatch pending..."),
@@ -119,7 +149,7 @@ pub async fn dispatch(
     }
 }
 
-/// start withdraw task, ws_server: ws://127.0.0.1:9944
+/// start withdraw task
 pub(crate) async fn start_withdraw_task_para(
     para_subxt_client: &Client<HeikoRuntime>,
     relay_subxt_client: &Client<RelayRuntime>,
@@ -156,9 +186,54 @@ pub(crate) async fn start_withdraw_task_para(
             wait_transfer_finished(&para_subxt_client, multi_account_id.clone(), call_hash).await?;
         println!("[+] Create withdraw transaction finished");
 
-        // todo transfer relay chain amount from one address to other
+        // todo this is just mock: transfer relay chain amount from one address to other
         let _ = transfer_relay_chain_balance(&relay_subxt_client, amount.clone()).await?;
         println!("[+] Create mock relay transaction finished");
+    }
+    Ok(())
+}
+
+/// start process_pending_unstake task
+pub(crate) async fn start_process_pending_unstake_task_para(
+    para_subxt_client: &Client<HeikoRuntime>,
+    para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
+    multi_account_id: AccountId,
+    threshold: u16,
+    others: Vec<AccountId>,
+    agent: AccountId,
+    owner: AccountId,
+    amount: Amount,
+    first: bool,
+) -> Result<(), Error> {
+    if first {
+        let call_hash = do_first_process_pending_unstake(
+            others.clone(),
+            &para_subxt_client,
+            para_signer,
+            agent,
+            owner,
+            amount.clone(),
+            threshold.clone(),
+        )
+        .await?;
+        let _ =
+            wait_transfer_finished(&para_subxt_client, multi_account_id.clone(), call_hash).await?;
+        println!("[+] Create process pending unstake transaction finished");
+    } else {
+        let call_hash = do_last_process_pending_unstake(
+            others.clone(),
+            multi_account_id.clone(),
+            &para_subxt_client,
+            para_signer,
+            agent,
+            owner,
+            amount.clone(),
+            threshold.clone(),
+        )
+        .await?;
+        let _ =
+            wait_transfer_finished(&para_subxt_client, multi_account_id.clone(), call_hash).await?;
+        println!("[+] Create process pending unstake transaction finished");
     }
     Ok(())
 }
