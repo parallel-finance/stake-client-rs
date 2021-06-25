@@ -23,6 +23,15 @@ pub struct SlashEvent<T: Staking> {
     pub amount: T::Balance,
 }
 
+/// Unbonded event.
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct UnbondedEvent<T: Staking> {
+    /// Account has unbonded this amount.
+    pub account: T::AccountId,
+    /// Amount of balance that was unbonded.
+    pub amount: T::Balance,
+}
+
 #[module]
 pub trait Staking: SubxtStaking {}
 
@@ -30,6 +39,12 @@ pub trait Staking: SubxtStaking {}
 pub struct BondExtraCall<T: Staking> {
     #[codec(compact)]
     pub max_additional: T::Balance,
+}
+
+#[derive(Call, Encode, Debug, Clone)]
+pub struct UnbondCall<T: Staking> {
+    #[codec(compact)]
+    pub value: T::Balance,
 }
 
 pub fn staking_bond_call<'a, T: Staking>(
@@ -50,4 +65,8 @@ pub fn staking_nominate_call<'a, T: Staking>(targets: Vec<T::Address>) -> Nomina
 
 pub fn staking_bond_extra_call<T: Staking>(max_additional: T::Balance) -> BondExtraCall<T> {
     BondExtraCall::<T> { max_additional }
+}
+
+pub fn staking_unbond_call<T: Staking>(value: T::Balance) -> UnbondCall<T> {
+    UnbondCall::<T> { value }
 }
