@@ -89,7 +89,10 @@ async fn listen_unstaked_event(
         match sub
             .next()
             .await
-            .and_then(|result_raw| -> Option<RawEvent> { result_raw.ok() })
+            .and_then(|result_raw| -> Option<RawEvent> {
+                println!("RawEvent:{:?}", result_raw);
+                result_raw.ok()
+            })
             .and_then(|raw| -> Option<UnstakedEvent<HeikoRuntime>> {
                 UnstakedEvent::<HeikoRuntime>::decode(&mut &raw.data[..]).ok()
             }) {
@@ -122,7 +125,10 @@ async fn listen_unbonded_event(
         match sub
             .next()
             .await
-            .and_then(|result_raw| -> Option<RawEvent> { result_raw.ok() })
+            .and_then(|result_raw| -> Option<RawEvent> {
+                println!("RawEvent:{:?}", result_raw);
+                result_raw.ok()
+            })
             .and_then(|raw| -> Option<UnbondedEvent<RelayRuntime>> {
                 UnbondedEvent::<RelayRuntime>::decode(&mut &raw.data[..]).ok()
             }) {
