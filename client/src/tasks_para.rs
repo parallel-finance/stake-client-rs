@@ -6,7 +6,7 @@ use crate::tasks::{
 };
 
 use futures::join;
-use parallel_primitives::{Balance, CurrencyId};
+use parallel_primitives::{Balance, CurrencyId, PriceWithDecimal};
 use runtime::error::Error;
 use runtime::heiko::runtime::HeikoRuntime;
 use runtime::kusama::{self, runtime::KusamaRuntime as RelayRuntime};
@@ -38,6 +38,8 @@ pub async fn run(
         .register_type_size::<<HeikoRuntime as System>::AccountId>("T::AccountId")
         .register_type_size::<CurrencyId>("CurrencyIdOf<T>")
         .register_type_size::<Balance>("BalanceOf<T>")
+        .register_type_size::<CurrencyId>("T::OracleKey")
+        .register_type_size::<PriceWithDecimal>("T::OracleValue")
         .skip_type_sizes_check()
         .build()
         .await
