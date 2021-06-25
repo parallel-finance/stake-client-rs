@@ -7,6 +7,8 @@ use substrate_subxt::balances::Balances;
 pub struct UnstakedEvent<T: LiquidStaking> {
     /// Account who unstake.
     pub account: T::AccountId,
+    /// voucher that will unstaked.
+    pub voucher: T::Balance,
     /// Amount of balance that will unstaked.
     pub amount: T::Balance,
 }
