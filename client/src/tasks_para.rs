@@ -41,9 +41,11 @@ pub async fn run(
     // todo register all unknown type
     let para_subxt_client = ClientBuilder::<HeikoRuntime>::new()
         .set_url(para_ws_server)
-        .register_type_size::<<HeikoRuntime as System>::AccountId>("T::AccountId")
         .register_type_size::<CurrencyId>("CurrencyIdOf<T>")
         .register_type_size::<Balance>("BalanceOf<T>")
+        .register_type_size::<<HeikoRuntime as System>::AccountId>("T::AccountId")
+        .register_type_size::<CurrencyId>("T::CurrencyId")
+        .register_type_size::<Balance>("T::Balance")
         .register_type_size::<CurrencyId>("T::OracleKey")
         .register_type_size::<PriceWithDecimal>("T::OracleValue")
         .skip_type_sizes_check()
@@ -180,7 +182,7 @@ pub async fn dispatch(
                         amount = amount - a;
                         count = count + 1;
                     }
-                    for i in (count-1)..0 {
+                    for i in (count - 1)..0 {
                         unbonded_list.remove(i);
                     }
                     response.send(0).unwrap();
@@ -344,7 +346,8 @@ async fn transfer_para_from_eve_to_pool(
     let signer = PairSigner::<HeikoRuntime, sp_core::sr25519::Pair>::new(pair.clone());
     let pool: sp_runtime::MultiAddress<sp_runtime::AccountId32, u32> = pool_account_id.into();
 
-    let call = kusama::api::balances_transfer_call::<HeikoRuntime>(&pool, amount);
+    let call =
+        kusama::api::currencies_transfer_call::<HeikoRuntime>(&pool, CurrencyId::KSM, amount);
     let result = subxt_client.submit(call, &signer).await.map_err(|e| {
         println!("{:?}", e);
         SubError::Other("failed to create transaction".to_string())

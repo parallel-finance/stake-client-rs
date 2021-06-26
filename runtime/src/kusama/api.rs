@@ -1,4 +1,5 @@
 pub use super::balances::balances_transfer_call;
+pub use super::currencies::currencies_transfer_call;
 pub use super::multisig::{
     multisig_approve_as_multi_call, multisig_as_multi_call, multisig_call_hash, MultisigData,
     MultisigsStore, Timepoint,
