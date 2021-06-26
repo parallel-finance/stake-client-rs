@@ -5,7 +5,7 @@ pub use parallel_primitives::CurrencyId;
 use runtime::heiko::{self, runtime::HeikoRuntime};
 use runtime::kusama::runtime::KusamaRuntime as RelayRuntime;
 use runtime::pallets::liquid_staking::UnstakedEvent;
-use runtime::pallets::staking::UnbondedEvent;
+use runtime::pallets::staking::{UnbondedEvent, WithdrawnEvent};
 use sp_core::Decode;
 use std::time;
 use substrate_subxt::{Client, EventSubscription, RawEvent};
@@ -26,8 +26,9 @@ pub async fn listener(
         currency_id.clone(),
     );
     let l2 = listen_unstaked_event(system_rpc_tx.clone(), para_subxt_client);
-    let l3 = listen_unbonded_event(system_rpc_tx, relay_subxt_client);
-    join!(l1, l2, l3);
+    let l3 = listen_unbonded_event(system_rpc_tx.clone(), relay_subxt_client);
+    let l4 = listen_withdraw_unbonded_event(system_rpc_tx.clone(), relay_subxt_client);
+    join!(l1, l2, l3, l4);
 }
 
 /// listen to the balance change of pool
@@ -112,13 +113,13 @@ async fn listen_unstaked_event(
 /// listen to the unbonded event
 async fn listen_unbonded_event(
     mut system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
-    para_subxt_client: &Client<RelayRuntime>,
+    relay_subxt_client: &Client<RelayRuntime>,
 ) {
-    let sub = para_subxt_client
+    let sub = relay_subxt_client
         .subscribe_finalized_events()
         .await
         .unwrap();
-    let decoder = para_subxt_client.events_decoder();
+    let decoder = relay_subxt_client.events_decoder();
     let mut sub = EventSubscription::<RelayRuntime>::new(sub, &decoder);
     sub.filter_event::<UnbondedEvent<RelayRuntime>>();
     loop {
@@ -138,6 +139,45 @@ async fn listen_unbonded_event(
                 system_rpc_tx
                     .try_send((
                         TasksType::RelayUnbonded(event.account, event.amount),
+                        resp_tx,
+                    ))
+                    .ok();
+                let _res = resp_rx.await.ok();
+            }
+            None => {}
+        }
+    }
+}
+
+/// listen to the withdraw unbonded event
+async fn listen_withdraw_unbonded_event(
+    mut system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
+    relay_subxt_client: &Client<RelayRuntime>,
+) {
+    let sub = relay_subxt_client
+        .subscribe_finalized_events()
+        .await
+        .unwrap();
+    let decoder = relay_subxt_client.events_decoder();
+    let mut sub = EventSubscription::<RelayRuntime>::new(sub, &decoder);
+    sub.filter_event::<WithdrawnEvent<RelayRuntime>>();
+    loop {
+        match sub
+            .next()
+            .await
+            .and_then(|result_raw| -> Option<RawEvent> {
+                println!("RawEvent:{:?}", result_raw);
+                result_raw.ok()
+            })
+            .and_then(|raw| -> Option<WithdrawnEvent<RelayRuntime>> {
+                WithdrawnEvent::<RelayRuntime>::decode(&mut &raw.data[..]).ok()
+            }) {
+            Some(event) => {
+                println!("[+] Received Withdrawn event: {:?}", &event);
+                let (resp_tx, resp_rx) = oneshot::channel();
+                system_rpc_tx
+                    .try_send((
+                        TasksType::RelayWithdrawUnbonded(event.account, event.amount),
                         resp_tx,
                     ))
                     .ok();

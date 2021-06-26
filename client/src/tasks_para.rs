@@ -1,10 +1,12 @@
 use crate::listener;
 use crate::primitives::{AccountId, Amount, TasksType};
 use crate::tasks::{
-    do_first_process_pending_unstake, do_first_withdraw, do_last_process_pending_unstake,
-    do_last_withdraw, wait_transfer_finished,
+    do_first_finish_processed_unstake, do_first_process_pending_unstake, do_first_withdraw,
+    do_last_finish_processed_unstake, do_last_process_pending_unstake, do_last_withdraw,
+    wait_transfer_finished,
 };
 
+use async_std::task;
 use futures::join;
 use parallel_primitives::{Balance, CurrencyId, PriceWithDecimal};
 use runtime::error::Error;
@@ -12,15 +14,17 @@ use runtime::heiko::runtime::HeikoRuntime;
 use runtime::kusama::{self, runtime::KusamaRuntime as RelayRuntime};
 use sp_core::crypto::Ss58Codec;
 use sp_core::Pair;
+use std::time;
 use substrate_subxt::system::System;
 use substrate_subxt::{Client, ClientBuilder, PairSigner};
 use substrate_subxt::{Error as SubError, Signer};
 use tokio::sync::{mpsc, oneshot};
-use async_std::task;
-use std::time;
+
 const RELAY_CHAIN_BOND_SEED: &str = "//Eve";
 const FROM_RELAY_CHAIN_SEED: &str = "//Alice";
 const TO_REPLAY_CHAIN_ADDRESS: &str = "5DjYJStmdZ2rcqXbXGX7TW85JsrW6uG4y9MUcLq2BoPMpRA7";
+
+const FROM_PARA_CHAIN_SEED: &str = "//Eve";
 
 pub async fn run(
     threshold: u16,
@@ -34,6 +38,7 @@ pub async fn run(
     first: bool,
 ) -> Result<(), Error> {
     // initialize heiko related api
+    // todo register all unknown type
     let para_subxt_client = ClientBuilder::<HeikoRuntime>::new()
         .set_url(para_ws_server)
         .register_type_size::<<HeikoRuntime as System>::AccountId>("T::AccountId")
@@ -78,6 +83,7 @@ pub async fn run(
         &relay_subxt_client,
         &para_signer,
         multi_account_id,
+        pool_account_id,
         threshold,
         others,
         first,
@@ -92,11 +98,14 @@ pub async fn dispatch(
     rely_subxt_client: &Client<RelayRuntime>,
     para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
     multi_account_id: AccountId,
+    pool_account_id: AccountId,
     threshold: u16,
     others: Vec<AccountId>,
     first: bool,
 ) {
+    // todo put this to database, because this will be lost when the client is restarted
     let mut unstake_list: Vec<(AccountId, Amount)> = vec![];
+    let mut unbonded_list: Vec<(AccountId, Amount)> = vec![];
     loop {
         match system_rpc_rx.recv().await {
             Some((task_type, response)) => match task_type {
@@ -132,19 +141,49 @@ pub async fn dispatch(
                                 multi_account_id.clone(),
                                 threshold.clone(),
                                 others.clone(),
-                                agent,
-                                owner,
-                                amount,
+                                agent.clone(),
+                                owner.clone(),
+                                amount.clone(),
                                 first.clone(),
                             )
                             .await
                             .map_err(|e| println!("error start_withdraw_task_para: {:?}", e));
                             response.send(0).unwrap();
+                            unbonded_list.push((owner, amount));
                             break;
                         }
                         index = index + 1
                     }
                     unstake_list.remove(index);
+                }
+                TasksType::RelayWithdrawUnbonded(agent, mut amount) => {
+                    // todo return from first, no need to compare amount, because may unbonded some
+                    // times, but just only one call of withdraw_unbonded.
+                    let mut count = 0;
+                    for (owner, a) in unbonded_list.clone().into_iter() {
+                        if amount >= a {
+                            let _ = start_finish_processed_unstake_task_para(
+                                &para_subxt_client,
+                                para_signer,
+                                multi_account_id.clone(),
+                                pool_account_id.clone(),
+                                threshold.clone(),
+                                others.clone(),
+                                agent.clone(),
+                                owner.clone(),
+                                amount.clone(),
+                                first.clone(),
+                            )
+                            .await
+                            .map_err(|e| println!("error start_withdraw_task_para: {:?}", e));
+                        }
+                        amount = amount - a;
+                        count = count + 1;
+                    }
+                    for i in (count-1)..0 {
+                        unbonded_list.remove(i);
+                    }
+                    response.send(0).unwrap();
                 }
             },
             None => println!("dispatch pending..."),
@@ -241,6 +280,83 @@ pub(crate) async fn start_process_pending_unstake_task_para(
     Ok(())
 }
 
+/// start finish_processed_unstake task
+pub(crate) async fn start_finish_processed_unstake_task_para(
+    para_subxt_client: &Client<HeikoRuntime>,
+    para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
+    multi_account_id: AccountId,
+    pool_account_id: AccountId,
+    threshold: u16,
+    others: Vec<AccountId>,
+    agent: AccountId,
+    owner: AccountId,
+    amount: Amount,
+    first: bool,
+) -> Result<(), Error> {
+    if first {
+        // transfer from eve to multi-address first
+        let _ = transfer_para_from_eve_to_pool(&para_subxt_client, pool_account_id, amount.clone())
+            .await?;
+
+        let call_hash = do_first_finish_processed_unstake(
+            others.clone(),
+            &para_subxt_client,
+            para_signer,
+            agent,
+            owner,
+            amount.clone(),
+            threshold.clone(),
+        )
+        .await?;
+        let _ =
+            wait_transfer_finished(&para_subxt_client, multi_account_id.clone(), call_hash).await?;
+        println!("[+] Create finish processed unstake transaction finished");
+    } else {
+        let call_hash = do_last_finish_processed_unstake(
+            others.clone(),
+            multi_account_id.clone(),
+            &para_subxt_client,
+            para_signer,
+            agent,
+            owner,
+            amount.clone(),
+            threshold.clone(),
+        )
+        .await?;
+        let _ =
+            wait_transfer_finished(&para_subxt_client, multi_account_id.clone(), call_hash).await?;
+        println!("[+] Create finish processed unstake transaction finished");
+    }
+    Ok(())
+}
+
+async fn transfer_para_from_eve_to_pool(
+    subxt_client: &Client<HeikoRuntime>,
+    pool_account_id: AccountId,
+    amount: u128,
+) -> Result<(), Error> {
+    println!(
+        "[+] Create para chain transaction from eve to pool, amount:{:?}",
+        amount
+    );
+    let pair = sp_core::sr25519::Pair::from_string(&FROM_PARA_CHAIN_SEED, None)
+        .map_err(|_err| SubError::Other("failed to create pair from seed".to_string()))?;
+    let signer = PairSigner::<HeikoRuntime, sp_core::sr25519::Pair>::new(pair.clone());
+    let pool: sp_runtime::MultiAddress<sp_runtime::AccountId32, u32> = pool_account_id.into();
+
+    let call = kusama::api::balances_transfer_call::<HeikoRuntime>(&pool, amount);
+    let result = subxt_client.submit(call, &signer).await.map_err(|e| {
+        println!("{:?}", e);
+        SubError::Other("failed to create transaction".to_string())
+    })?;
+
+    println!(
+        "[+] transfer_para_from_eve_to_pool finished, para chain call hash {:?}",
+        result
+    );
+    Ok(())
+}
+
 async fn transfer_relay_chain_balance(
     subxt_client: &Client<RelayRuntime>,
     amount: u128,
@@ -279,7 +395,7 @@ pub(crate) async fn start_unstake_task(
     if first {
         let _ = do_relay_unbond(&relay_subxt_client, amount.clone()).await?;
 
-        task::sleep(time::Duration::from_secs(5)).await;
+        task::sleep(time::Duration::from_secs(20)).await;
 
         let _ = do_relay_withdraw_unbonded(&relay_subxt_client).await?;
     }

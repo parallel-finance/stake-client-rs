@@ -26,5 +26,6 @@ pub enum TasksType {
     ParaStake(Amount),
     ParaUnstake(AccountId, Amount),
     RelayUnbonded(AccountId, Amount),
+    RelayWithdrawUnbonded(AccountId, Amount),
 }
 pub type Amount = u128;
