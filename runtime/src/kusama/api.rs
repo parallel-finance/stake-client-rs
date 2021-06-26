@@ -4,7 +4,7 @@ pub use super::multisig::{
     MultisigsStore, Timepoint,
 };
 pub use super::staking::{
-    staking_bond_call, staking_bond_extra_call, staking_unbond_call, BondExtraCall, BondedStore,
-    UnbondCall,
+    staking_bond_call, staking_bond_extra_call, staking_unbond_call,
+    staking_withdraw_unbonded_call, BondExtraCall, BondedStore, UnbondCall,
 };
 pub use super::system::AccountStore;

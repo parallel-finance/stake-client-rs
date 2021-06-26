@@ -16,7 +16,8 @@ use substrate_subxt::system::System;
 use substrate_subxt::{Client, ClientBuilder, PairSigner};
 use substrate_subxt::{Error as SubError, Signer};
 use tokio::sync::{mpsc, oneshot};
-
+use async_std::task;
+use std::time;
 const RELAY_CHAIN_BOND_SEED: &str = "//Eve";
 const FROM_RELAY_CHAIN_SEED: &str = "//Alice";
 const TO_REPLAY_CHAIN_ADDRESS: &str = "5DjYJStmdZ2rcqXbXGX7TW85JsrW6uG4y9MUcLq2BoPMpRA7";
@@ -276,12 +277,16 @@ pub(crate) async fn start_unstake_task(
     first: bool,
 ) -> Result<(), Error> {
     if first {
-        let _ = do_relay_unstake(&relay_subxt_client, amount.clone()).await?;
+        let _ = do_relay_unbond(&relay_subxt_client, amount.clone()).await?;
+
+        task::sleep(time::Duration::from_secs(5)).await;
+
+        let _ = do_relay_withdraw_unbonded(&relay_subxt_client).await?;
     }
     Ok(())
 }
 
-async fn do_relay_unstake(subxt_client: &Client<RelayRuntime>, amount: u128) -> Result<(), Error> {
+async fn do_relay_unbond(subxt_client: &Client<RelayRuntime>, amount: u128) -> Result<(), Error> {
     println!("[+] Create relay chain unbond transaction");
     let pair = sp_core::sr25519::Pair::from_string(&RELAY_CHAIN_BOND_SEED, None)
         .map_err(|_err| SubError::Other("failed to create pair from seed".to_string()))?;
@@ -294,6 +299,24 @@ async fn do_relay_unstake(subxt_client: &Client<RelayRuntime>, amount: u128) -> 
 
     println!(
         "[+] do_relay_unstake finished, replay chain call hash {:?}",
+        result
+    );
+    Ok(())
+}
+
+async fn do_relay_withdraw_unbonded(subxt_client: &Client<RelayRuntime>) -> Result<(), Error> {
+    println!("[+] Create relay chain withdraw unbonded transaction");
+    let pair = sp_core::sr25519::Pair::from_string(&RELAY_CHAIN_BOND_SEED, None)
+        .map_err(|_err| SubError::Other("failed to create pair from seed".to_string()))?;
+    let signer = PairSigner::<RelayRuntime, sp_core::sr25519::Pair>::new(pair.clone());
+    let call = kusama::api::staking_withdraw_unbonded_call::<RelayRuntime>(0);
+    let result = subxt_client.submit(call, &signer).await.map_err(|e| {
+        println!("{:?}", e);
+        SubError::Other("failed to create withdraw unbonded transaction".to_string())
+    })?;
+
+    println!(
+        "[+] do_relay_withdraw_unbonded finished, replay chain call hash {:?}",
         result
     );
     Ok(())

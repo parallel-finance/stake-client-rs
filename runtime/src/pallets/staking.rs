@@ -1,4 +1,5 @@
 use codec::{Decode, Encode};
+use core::marker::PhantomData;
 pub use substrate_subxt::staking::BondedStore;
 use substrate_subxt::staking::{
     BondCall, NominateCall, RewardDestination, Staking as SubxtStaking,
@@ -32,6 +33,15 @@ pub struct UnbondedEvent<T: Staking> {
     pub amount: T::Balance,
 }
 
+/// Withdrawn event.
+#[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
+pub struct WithdrawnEvent<T: Staking> {
+    /// Account has withdraw this amount.
+    pub account: T::AccountId,
+    /// Amount of balance to withdraw.
+    pub amount: T::Balance,
+}
+
 #[module]
 pub trait Staking: SubxtStaking {}
 
@@ -45,6 +55,12 @@ pub struct BondExtraCall<T: Staking> {
 pub struct UnbondCall<T: Staking> {
     #[codec(compact)]
     pub value: T::Balance,
+}
+
+#[derive(Call, Encode, Debug, Clone)]
+pub struct WithdrawUnbondedCall<T: Staking> {
+    pub num_slashing_spans: u32,
+    pub _runtime: PhantomData<T>,
 }
 
 pub fn staking_bond_call<'a, T: Staking>(
@@ -69,4 +85,13 @@ pub fn staking_bond_extra_call<T: Staking>(max_additional: T::Balance) -> BondEx
 
 pub fn staking_unbond_call<T: Staking>(value: T::Balance) -> UnbondCall<T> {
     UnbondCall::<T> { value }
+}
+
+pub fn staking_withdraw_unbonded_call<T: Staking>(
+    num_slashing_spans: u32,
+) -> WithdrawUnbondedCall<T> {
+    WithdrawUnbondedCall::<T> {
+        num_slashing_spans,
+        _runtime: PhantomData,
+    }
 }
