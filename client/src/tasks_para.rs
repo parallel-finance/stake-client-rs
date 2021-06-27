@@ -7,6 +7,7 @@ use crate::tasks::{
 };
 
 use async_std::task;
+use core::marker::PhantomData;
 use futures::join;
 use parallel_primitives::{Balance, CurrencyId, PriceWithDecimal};
 use runtime::error::Error;
@@ -14,6 +15,7 @@ use runtime::heiko::runtime::HeikoRuntime;
 use runtime::kusama::{self, runtime::KusamaRuntime as RelayRuntime};
 use sp_core::crypto::Ss58Codec;
 use sp_core::Pair;
+use sp_keyring::AccountKeyring;
 use std::time;
 use substrate_subxt::system::System;
 use substrate_subxt::{Client, ClientBuilder, PairSigner};
@@ -23,8 +25,8 @@ use tokio::sync::{mpsc, oneshot};
 const RELAY_CHAIN_BOND_SEED: &str = "//Eve";
 const FROM_RELAY_CHAIN_SEED: &str = "//Alice";
 const TO_REPLAY_CHAIN_ADDRESS: &str = "5DjYJStmdZ2rcqXbXGX7TW85JsrW6uG4y9MUcLq2BoPMpRA7";
-
 const FROM_PARA_CHAIN_SEED: &str = "//Eve";
+const RELAY_CHAIN_ERA_LOCKED: u32 = 1;
 
 pub async fn run(
     threshold: u16,
@@ -53,6 +55,7 @@ pub async fn run(
         .await
         .unwrap();
 
+    // todo register all unknown type
     let relay_subxt_client = ClientBuilder::<RelayRuntime>::new()
         .set_url(relay_ws_server)
         .register_type_size::<<RelayRuntime as System>::AccountId>("T::AccountId")
@@ -97,7 +100,7 @@ pub async fn run(
 pub async fn dispatch(
     mut system_rpc_rx: mpsc::Receiver<(TasksType, oneshot::Sender<u64>)>,
     para_subxt_client: &Client<HeikoRuntime>,
-    rely_subxt_client: &Client<RelayRuntime>,
+    relay_subxt_client: &Client<RelayRuntime>,
     para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
     multi_account_id: AccountId,
     pool_account_id: AccountId,
@@ -108,13 +111,15 @@ pub async fn dispatch(
     // todo put this to database, because this will be lost when the client is restarted
     let mut unstake_list: Vec<(AccountId, Amount)> = vec![];
     let mut unbonded_list: Vec<(AccountId, Amount)> = vec![];
+    let mut unbonded_era_index_list: Vec<(AccountId, u32)> = vec![];
     loop {
         match system_rpc_rx.recv().await {
             Some((task_type, response)) => match task_type {
                 TasksType::ParaStake(amount) => {
+                    println!("[+] Start ParaStake task");
                     let _ = start_withdraw_task_para(
                         &para_subxt_client,
-                        &rely_subxt_client,
+                        &relay_subxt_client,
                         para_signer,
                         multi_account_id.clone(),
                         threshold.clone(),
@@ -127,16 +132,33 @@ pub async fn dispatch(
                     response.send(0).unwrap();
                 }
                 TasksType::ParaUnstake(owner, amount) => {
-                    let _ = start_unstake_task(&rely_subxt_client, amount.clone(), first.clone())
+                    println!("[+] Start ParaUnstake task");
+                    let _ = start_unstake_task(&relay_subxt_client, amount.clone(), first.clone())
                         .await
                         .map_err(|e| println!("error start_withdraw_task_para: {:?}", e));
                     response.send(0).unwrap();
                     unstake_list.push((owner, amount));
                 }
                 TasksType::RelayUnbonded(agent, amount) => {
+                    println!("[+] Start RelayUnbonded task");
                     let mut index = 0;
                     for (owner, a) in unstake_list.clone().into_iter() {
                         if amount == a {
+                            let store = kusama::api::CurrentEraStore::<RelayRuntime> {
+                                _runtime: PhantomData,
+                            };
+                            match relay_subxt_client.fetch(&store, None).await {
+                                Ok(era) => {
+                                    if let Some(era_index) = era {
+                                        let ctrl = AccountKeyring::Eve.to_account_id().into();
+                                        unbonded_era_index_list.push((ctrl, era_index));
+                                    }
+                                }
+                                Err(e) => {
+                                    println!("error fetch CurrentEraStore: {:?}", e);
+                                }
+                            }
+
                             let _ = start_process_pending_unstake_task_para(
                                 &para_subxt_client,
                                 para_signer,
@@ -159,8 +181,7 @@ pub async fn dispatch(
                     unstake_list.remove(index);
                 }
                 TasksType::RelayWithdrawUnbonded(agent, mut amount) => {
-                    // todo return from first, no need to compare amount, because may unbonded some
-                    // times, but just only one call of withdraw_unbonded.
+                    println!("[+] Start RelayWithdrawUnbonded task");
                     let mut count = 0;
                     for (owner, a) in unbonded_list.clone().into_iter() {
                         if amount >= a {
@@ -186,6 +207,16 @@ pub async fn dispatch(
                         unbonded_list.remove(i);
                     }
                     response.send(0).unwrap();
+                }
+                TasksType::RelayEraIndexChanged(era_index) => {
+                    println!("[+] Start RelayEraIndexChanged task");
+                    for (_ctr, era) in unbonded_era_index_list.clone().into_iter() {
+                        if era_index.clone() - era >= RELAY_CHAIN_ERA_LOCKED {
+                            let _ = do_relay_withdraw_unbonded(&relay_subxt_client)
+                                .await
+                                .map_err(|e| println!("error do_relay_withdraw_unbonded: {:?}", e));
+                        }
+                    }
                 }
             },
             None => println!("dispatch pending..."),
@@ -395,12 +426,15 @@ pub(crate) async fn start_unstake_task(
     amount: Amount,
     first: bool,
 ) -> Result<(), Error> {
+    // controller do unbond, current controller is Eve
     if first {
         let _ = do_relay_unbond(&relay_subxt_client, amount.clone()).await?;
 
+        // todo: remove me, it's just for mock
         task::sleep(time::Duration::from_secs(20)).await;
-
         let _ = do_relay_withdraw_unbonded(&relay_subxt_client).await?;
+    } else {
+        // current controller is Eve
     }
     Ok(())
 }

@@ -6,6 +6,6 @@ pub use super::multisig::{
 };
 pub use super::staking::{
     staking_bond_call, staking_bond_extra_call, staking_unbond_call,
-    staking_withdraw_unbonded_call, BondExtraCall, BondedStore, UnbondCall,
+    staking_withdraw_unbonded_call, BondExtraCall, BondedStore, CurrentEraStore, UnbondCall,
 };
 pub use super::system::AccountStore;

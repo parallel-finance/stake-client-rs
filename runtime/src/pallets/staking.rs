@@ -6,6 +6,13 @@ use substrate_subxt::staking::{
 };
 pub use substrate_subxt::system::System;
 
+#[derive(Encode, Decode, Copy, Clone, Debug, Default, Store)]
+pub struct CurrentEraStore<T: Staking> {
+    #[store(returns = u32)]
+    /// Marker for the runtime
+    pub _runtime: PhantomData<T>,
+}
+
 /// Reward event.
 #[derive(Clone, Debug, Eq, PartialEq, Event, Decode)]
 pub struct RewardEvent<T: Staking> {

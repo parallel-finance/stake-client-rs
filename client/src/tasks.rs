@@ -1,4 +1,4 @@
-// use crate::listener::listen_pool_balances;
+// use crate::listener::listen_pool_balance;
 use crate::primitives::{AccountId, Amount, MIN_WITHDRAW_BALANCE};
 
 // use crate::DB;
@@ -95,7 +95,7 @@ pub(crate) async fn start_withdraw_task(
     //     println!("[+] Listen to pool's balance");
     //     // todo check state, finished?
     //     let amount: u128;
-    //     match listen_pool_balances(
+    //     match listen_pool_balance(
     //         subxt_client.clone(),
     //         pool_account_id.clone(),
     //         currency_id.clone(),
