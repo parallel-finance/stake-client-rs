@@ -26,6 +26,7 @@ const RELAY_CHAIN_BOND_SEED: &str = "//Eve";
 const FROM_RELAY_CHAIN_SEED: &str = "//Alice";
 const TO_REPLAY_CHAIN_ADDRESS: &str = "5DjYJStmdZ2rcqXbXGX7TW85JsrW6uG4y9MUcLq2BoPMpRA7";
 const FROM_PARA_CHAIN_SEED: &str = "//Eve";
+// todo change to relay chain Bonding Duration
 const RELAY_CHAIN_ERA_LOCKED: u32 = 1;
 
 pub async fn run(
@@ -108,7 +109,7 @@ pub async fn dispatch(
     others: Vec<AccountId>,
     first: bool,
 ) {
-    // todo put this to database, because this will be lost when the client is restarted
+    // todo put this to database, because this will be lost when the client restart
     let mut unstake_list: Vec<(AccountId, Amount)> = vec![];
     let mut unbonded_list: Vec<(AccountId, Amount)> = vec![];
     let mut unbonded_era_index_list: Vec<(AccountId, u32)> = vec![];
@@ -328,6 +329,7 @@ pub(crate) async fn start_finish_processed_unstake_task_para(
 ) -> Result<(), Error> {
     if first {
         // transfer from eve to multi-address first
+        // todo move it out from here and use XCM
         let _ = transfer_para_from_eve_to_pool(&para_subxt_client, pool_account_id, amount.clone())
             .await?;
 
