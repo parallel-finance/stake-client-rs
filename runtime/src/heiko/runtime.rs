@@ -1,3 +1,4 @@
+use super::currencies::Currencies;
 use super::liquid_staking::LiquidStaking;
 use super::multisig::Multisig;
 use super::orml_tokens::Tokens;
@@ -14,3 +15,5 @@ impl Tokens for HeikoRuntime {
 }
 
 impl System for HeikoRuntime {}
+
+impl Currencies for HeikoRuntime {}

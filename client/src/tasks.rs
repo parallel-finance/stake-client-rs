@@ -1,4 +1,4 @@
-// use crate::listener::listen_pool_balances;
+// use crate::listener::listen_pool_balance;
 use crate::primitives::{AccountId, Amount, MIN_WITHDRAW_BALANCE};
 
 // use crate::DB;
@@ -95,7 +95,7 @@ pub(crate) async fn start_withdraw_task(
     //     println!("[+] Listen to pool's balance");
     //     // todo check state, finished?
     //     let amount: u128;
-    //     match listen_pool_balances(
+    //     match listen_pool_balance(
     //         subxt_client.clone(),
     //         pool_account_id.clone(),
     //         currency_id.clone(),
@@ -440,6 +440,107 @@ pub(crate) async fn do_last_process_pending_unstake(
     Ok(call_hash)
 }
 
+/// The first wallet to call finish_processed_unstake. No need use 'TimePoint' and call 'approve_as_multi'.
+pub(crate) async fn do_first_finish_processed_unstake(
+    others: Vec<AccountId>,
+    subxt_client: &Client<HeikoRuntime>,
+    signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
+    agent: AccountId,
+    owner: AccountId,
+    amount: Amount,
+    threshold: u16,
+) -> Result<[u8; 32], Error> {
+    println!("[+] Create first finish_processed_unstake transaction");
+
+    println!("---------- start create multi-signature transaction ----------");
+    // 1.1 construct balance transfer call
+    let inner_call = heiko::api::liquid_staking_finish_processed_unstake_call::<HeikoRuntime>(
+        agent, owner, amount,
+    );
+    let inner_call_encoded = subxt_client
+        .encode(inner_call)
+        .map_err(|e| Error::SubxtError(e))?;
+    let sudo_call = sudo::SudoCall::<HeikoRuntime> {
+        _runtime: PhantomData,
+        call: &inner_call_encoded,
+    };
+
+    let mc =
+        heiko::api::multisig_approve_as_multi_call::<HeikoRuntime, sudo::SudoCall<HeikoRuntime>>(
+            subxt_client,
+            threshold,
+            others,
+            None,
+            sudo_call.clone(),
+            0u64,
+        )?;
+
+    // 1.2 initial the multisg call
+    let result = subxt_client.submit(mc, signer).await?;
+    println!("multisig_approve_as_multi_call hash {:?}", result);
+
+    // get account_id of multi address
+    let call_hash = kusama::api::multisig_call_hash(subxt_client, sudo_call)?;
+    println!("call hash {:?}", format!("0x{}", hex::encode(call_hash)));
+    println!("---------- end create multi-signature transaction ----------");
+    Ok(call_hash)
+}
+
+/// If the wallet is the last one need to get 'TimePoint' and call 'as_multi'.
+pub(crate) async fn do_last_finish_processed_unstake(
+    others: Vec<AccountId>,
+    multi_account_id: AccountId,
+    subxt_client: &Client<HeikoRuntime>,
+    signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
+    agent: AccountId,
+    owner: AccountId,
+    amount: Amount,
+    threshold: u16,
+) -> Result<[u8; 32], Error> {
+    println!("[+] Crate last finish_processed_unstake transaction");
+    println!("---------- start create multi-signature transaction ----------");
+    // construct process pending unstake call
+    let inner_call = heiko::api::liquid_staking_finish_processed_unstake_call::<HeikoRuntime>(
+        agent, owner, amount,
+    );
+
+    let inner_call_encoded = subxt_client
+        .encode(inner_call)
+        .map_err(|e| Error::SubxtError(e))?;
+    let sudo_call = sudo::SudoCall::<HeikoRuntime> {
+        _runtime: PhantomData,
+        call: &inner_call_encoded,
+    };
+
+    // check if timepoint already exist.
+    let call_hash =
+        heiko::api::multisig_call_hash(subxt_client, sudo_call.clone()).map_err(|_e| {
+            Error::SubxtError(SubError::Other("failed to load get call hash".to_string()))
+        })?;
+
+    // let when = get_time_point::<HeikoRuntime>(subxt_client, account_id.clone(), call_hash).await;
+    let when =
+        get_last_time_point::<HeikoRuntime>(subxt_client, multi_account_id.clone(), call_hash)
+            .await;
+    println!("multisig timepoint{:?}", when);
+
+    let mc = kusama::api::multisig_as_multi_call::<HeikoRuntime, sudo::SudoCall<HeikoRuntime>>(
+        subxt_client,
+        threshold,
+        others,
+        when,
+        sudo_call,
+        false,
+        1_000_000_000_000,
+    )?;
+
+    // 1.2 initial the multisg call
+    let result = subxt_client.submit(mc, signer).await?;
+    println!("multisig_as_multi_call hash {:?}", result);
+    println!("---------- end create multi-signature transaction ----------");
+    Ok(call_hash)
+}
+
 pub(crate) async fn get_last_time_point<T: Runtime + Multisig>(
     subxt_client: &Client<T>,
     multisig_account: T::AccountId,
@@ -498,7 +599,7 @@ pub(crate) async fn wait_transfer_finished(
 ) -> Result<(), Error> {
     // todo check if the transaction is in block
     println!("transferring, waiting...");
-    thread::sleep(time::Duration::from_secs(20));
+    thread::sleep(time::Duration::from_secs(6));
 
     loop {
         let store = kusama::api::MultisigsStore::<HeikoRuntime> {

@@ -12,13 +12,14 @@ use sp_utils::mpsc::TracingUnboundedSender;
 use std::str::FromStr;
 use std::time::Duration;
 use substrate_subxt::{system::System, Client, EventSubscription, RawEvent};
+
 pub async fn listener(
     subxt_relay_client: &Client<KusamaRuntime>,
     system_rpc_tx: TracingUnboundedSender<TasksType>,
     pool_addr: String,
 ) {
     // start future-1 listening relaychain multisig-account balance
-    let f1 = listen_balance(
+    let f1 = listen_agent_balance(
         subxt_relay_client.clone(),
         system_rpc_tx.clone(),
         pool_addr.clone(),
@@ -30,7 +31,7 @@ pub async fn listener(
     join!(f1, f2, f3);
 }
 
-async fn listen_balance(
+async fn listen_agent_balance(
     subxt_relay_client: Client<KusamaRuntime>,
     system_rpc_tx: TracingUnboundedSender<TasksType>,
     pool_addr: String,
