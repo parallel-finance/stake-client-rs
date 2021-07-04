@@ -1,72 +1,97 @@
-use clap::{App, SubCommand};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
-pub struct Cmd {
-    /// websocket server endpoint
-    #[structopt(short, long, default_value = "ws://127.0.0.1:9944")]
-    pub ws_server: String,
+#[structopt(name = "stake_client", about = "Utility for stake client")]
+pub enum StakeClient {
+    /// Create keystore file
+    Create(CreateCmd),
 
+    /// Run para chain multi-sig account
+    StartPara(StartParaCmd),
+
+    /// Run relay chain multi-sig account
+    StartRelay(StartRelayCmd),
+}
+
+#[derive(Debug, StructOpt)]
+pub struct CreateCmd {
+    /// the keystore name
+    #[structopt(short, long, default_value = "keystore")]
+    pub name: String,
+
+    /// the threshold of multi-signature accounts
+    #[structopt(short, long)]
+    pub threshold: u16,
+
+    /// the other signatories of multi-signature accounts
+    #[structopt(short, long)]
+    pub other_signatories: Vec<String>,
+}
+
+#[derive(Debug, StructOpt)]
+pub struct StartParaCmd {
+    /// the keystore for signing
+    #[structopt(short, long, default_value = "keystore.json")]
+    pub key_store: String,
+
+    /// websocket server endpoint of para chain
+    #[structopt(long, default_value = "ws://127.0.0.1:9944")]
+    pub para_ws_server: String,
+
+    /// websocket server endpoint of relay chain
+    #[structopt(long, default_value = "ws://127.0.0.1:9955")]
+    pub relay_ws_server: String,
+
+    /// data base server endpoint
     #[structopt(short, long, default_value = "http://127.0.0.1:1521")]
     pub db_server: String,
 
-    /// the keystore for signing
-    #[structopt(short, long, default_value = "//Alice")]
-    pub key_store: String,
+    /// pool address of para chain
+    #[structopt(
+        long,
+        default_value = "5EYCAe5iie3Jn5XKaz6Q2bumoE3whfem8PUFtkVzeSq1yLoH"
+    )]
+    pub para_pool_addr: String,
+
+    /// the password of keystore
+    #[structopt(short, long)]
+    pub password: Option<String>,
+
+    /// temp use to decide which account create first multi-signature transaction
+    #[structopt(short, long)]
+    pub first: bool,
 }
 
-pub fn get_app<'a, 'b>() -> App<'a, 'b> {
-    App::new("stake-wallet")
-        .author("Parallel Team")
-        .about("Multi signature wallet for staking.")
-        .version(env!("CARGO_PKG_VERSION"))
-        .subcommands(vec![
-            SubCommand::with_name("start")
-                .about("Start client")
-                .args_from_usage(
-                    "
-            <file>  'The keystore filename with path'
-            <ws_server>  'The ws server url'
-            <pool_addr>  'The address of pool in para chain'
-            <password>   'The password'
-            ",
-                ),
-            SubCommand::with_name("startpara")
-                .about("Start client")
-                .args_from_usage(
-                    "
-            <file>  'The keystore filename with path'
-            <relay_ws_server>  'The relay ws server url'
-            <para_ws_server>  'The para ws server url'
-            <pool_addr>  'The address of pool in para chain'
-            <first>  'temp use, first to create withdraw transaction'
-            <password>   'The password'
-            ",
-                ),
-            SubCommand::with_name("getaddress").about("Print account address"),
-            SubCommand::with_name("getmultiaddress")
-                .about("Print multi signature account addresses"),
-            SubCommand::with_name("show").about("Print detail information of wallet"),
-            SubCommand::with_name("create")
-                .about("Submit a transfer transaction")
-                .args_from_usage(
-                    "
-                <name>  'The name of keystore file'
-                <threshold>  'The threshold of multi signature account'
-                <others>  'The other signer address of multi signature account'
-          ",
-                ),
-            SubCommand::with_name("startrelay")
-                .about("Start relay client")
-                .args_from_usage(
-                    "
-            <file>  'The keystore filename with path'
-            <relay_ws_server>  'The relay ws server url'
-            <para_ws_server>  'The para ws server url'
-            <relay_pool_addr>  'The address of pool in relay chain'
-            <first>  'temp use, first to create withdraw transaction'
-            <password>   'The password'
-            ",
-                ),
-        ])
+#[derive(Debug, StructOpt)]
+pub struct StartRelayCmd {
+    /// the keystore for signing
+    #[structopt(short, long, default_value = "keystore.json")]
+    pub key_store: String,
+
+    /// websocket server endpoint of para chain
+    #[structopt(long, default_value = "ws://127.0.0.1:9944")]
+    pub para_ws_server: String,
+
+    /// websocket server endpoint of relay chain
+    #[structopt(long, default_value = "ws://127.0.0.1:9955")]
+    pub relay_ws_server: String,
+
+    /// data base server endpoint
+    #[structopt(short, long, default_value = "http://127.0.0.1:1521")]
+    pub db_server: String,
+
+    /// pool address of relay chain
+    #[structopt(
+        long,
+        default_value = "5DjYJStmdZ2rcqXbXGX7TW85JsrW6uG4y9MUcLq2BoPMpRA7"
+    )]
+    pub relay_pool_addr: String,
+
+    /// the password of keystore
+    #[structopt(short, long)]
+    pub password: Option<String>,
+
+    /// temp use to decide which account create first multi-signature transaction
+    #[structopt(short, long)]
+    pub first: bool,
 }
