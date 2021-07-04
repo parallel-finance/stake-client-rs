@@ -3,37 +3,46 @@ use super::KusamaRuntime;
 use super::TasksType;
 use super::LISTEN_INTERVAL;
 use super::MIN_BOND_BALANCE;
+
 use async_std::task;
+use core::marker::PhantomData;
 use futures::join;
 use log::{debug, error, info};
-use runtime::pallets::staking::{RewardEvent, SlashEvent};
+use runtime::heiko::runtime::HeikoRuntime;
+use runtime::pallets::liquid_staking::UnstakedEvent;
+use runtime::pallets::staking::{RewardEvent, SlashEvent, UnbondedEvent};
 use sp_core::Decode;
-use sp_utils::mpsc::TracingUnboundedSender;
 use std::str::FromStr;
 use std::time::Duration;
 use substrate_subxt::{system::System, Client, EventSubscription, RawEvent};
+use tokio::sync::{mpsc, oneshot};
 
 pub async fn listener(
-    subxt_relay_client: &Client<KusamaRuntime>,
-    system_rpc_tx: TracingUnboundedSender<TasksType>,
+    relay_subxt_client: &Client<KusamaRuntime>,
+    para_subxt_client: &Client<HeikoRuntime>,
+    system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
     pool_addr: String,
 ) {
     // start future-1 listening relaychain multisig-account balance
-    let f1 = listen_agent_balance(
-        subxt_relay_client.clone(),
+    let l1 = listen_agent_balance(
+        relay_subxt_client.clone(),
         system_rpc_tx.clone(),
         pool_addr.clone(),
     );
     // start future-2 listening relaychain slash&reward
-    let f2 = listen_reward(subxt_relay_client.clone(), system_rpc_tx.clone());
-    let f3 = listen_slash(subxt_relay_client.clone(), system_rpc_tx.clone());
+    let l2 = listen_reward(relay_subxt_client.clone(), system_rpc_tx.clone());
+    let l3 = listen_slash(relay_subxt_client.clone(), system_rpc_tx.clone());
+    let l4 = listen_unstaked_event(system_rpc_tx.clone(), para_subxt_client);
+    let l5 = listen_unbonded_event(system_rpc_tx.clone(), relay_subxt_client);
+    let l6 = listen_relay_chain_era(system_rpc_tx.clone(), relay_subxt_client);
+
     info!("listener join");
-    join!(f1, f2, f3);
+    join!(l1, l2, l3, l4, l5, l6);
 }
 
 async fn listen_agent_balance(
     subxt_relay_client: Client<KusamaRuntime>,
-    system_rpc_tx: TracingUnboundedSender<TasksType>,
+    system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
     pool_addr: String,
 ) {
     let account_id: <KusamaRuntime as System>::AccountId =
@@ -58,21 +67,30 @@ async fn listen_agent_balance(
                 let bond_controller: Option<<KusamaRuntime as System>::AccountId> =
                     subxt_relay_client.fetch(&bond, None).await.unwrap();
                 info!("bond_controller: {:?}", &bond_controller);
+                let (resp_tx, resp_rx) = oneshot::channel();
                 let r = account_store.and_then(|account_store| -> Option<()> {
                     let free = account_store.data.free;
                     let misc_frozen = account_store.data.misc_frozen;
-                    //FIXME: bug, while do the last-mulsig about first-round, the second-round fisrt-mulsig is going.
                     //for now, make the loop interval longer.
                     if free - misc_frozen >= MIN_BOND_BALANCE {
-                        let _ = bond_controller.map_or_else(
-                            || system_rpc_tx.clone().start_send(TasksType::RelayBond),
-                            |_bond_controller| {
-                                system_rpc_tx.clone().start_send(TasksType::RelayBondExtra)
-                            },
-                        );
+                        match bond_controller {
+                            Some(_bond) => {
+                                system_rpc_tx
+                                    .clone()
+                                    .try_send((TasksType::RelayBond, resp_tx))
+                                    .ok();
+                            }
+                            None => {
+                                system_rpc_tx
+                                    .clone()
+                                    .try_send((TasksType::RelayBondExtra, resp_tx))
+                                    .ok();
+                            }
+                        }
                     }
                     Some(())
                 });
+                let _res = resp_rx.await.ok();
                 debug!("listen_balance option: {:?}", r);
             }
             Err(e) => {
@@ -86,7 +104,7 @@ async fn listen_agent_balance(
 
 async fn listen_reward(
     subxt_relay_client: Client<KusamaRuntime>,
-    mut system_rpc_tx: TracingUnboundedSender<TasksType>,
+    mut system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
 ) {
     let sub = subxt_relay_client
         .subscribe_finalized_events()
@@ -97,6 +115,7 @@ async fn listen_reward(
     sub.filter_event::<RewardEvent<_>>();
     loop {
         info!("loop listen_reward");
+        let (resp_tx, resp_rx) = oneshot::channel();
         let _ = sub
             .next()
             .await
@@ -107,15 +126,16 @@ async fn listen_reward(
             .and_then(|event| -> Option<()> {
                 info!("Receive Event: {:?}", &event);
                 system_rpc_tx
-                    .start_send(TasksType::ParaRecordRewards(event.amount))
+                    .try_send((TasksType::ParaRecordRewards(event.amount), resp_tx))
                     .ok()
             });
+        let _res = resp_rx.await.ok();
     }
 }
 
 async fn listen_slash(
     subxt_relay_client: Client<KusamaRuntime>,
-    mut system_rpc_tx: TracingUnboundedSender<TasksType>,
+    mut system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
 ) {
     let sub = subxt_relay_client
         .subscribe_finalized_events()
@@ -126,6 +146,7 @@ async fn listen_slash(
     sub.filter_event::<SlashEvent<_>>();
     loop {
         info!("loop listen_slash");
+        let (resp_tx, resp_rx) = oneshot::channel();
         let _ = sub
             .next()
             .await
@@ -136,8 +157,118 @@ async fn listen_slash(
             .and_then(|event| -> Option<()> {
                 info!("Receive Event: {:?}", &event);
                 system_rpc_tx
-                    .start_send(TasksType::ParaRecordSlash(event.amount))
+                    .try_send((TasksType::ParaRecordSlash(event.amount), resp_tx))
                     .ok()
             });
+        let _res = resp_rx.await.ok();
+    }
+}
+
+/// listen to the unstaked event
+async fn listen_unstaked_event(
+    mut system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
+    para_subxt_client: &Client<HeikoRuntime>,
+) {
+    let sub = para_subxt_client
+        .subscribe_finalized_events()
+        .await
+        .unwrap();
+    let decoder = para_subxt_client.events_decoder();
+    let mut sub = EventSubscription::<HeikoRuntime>::new(sub, &decoder);
+    sub.filter_event::<UnstakedEvent<HeikoRuntime>>();
+    loop {
+        match sub
+            .next()
+            .await
+            .and_then(|result_raw| -> Option<RawEvent> {
+                println!("RawEvent:{:?}", result_raw);
+                result_raw.ok()
+            })
+            .and_then(|raw| -> Option<UnstakedEvent<HeikoRuntime>> {
+                UnstakedEvent::<HeikoRuntime>::decode(&mut &raw.data[..]).ok()
+            }) {
+            Some(event) => {
+                println!("[+] Received Unstaked event: {:?}", &event);
+                let (resp_tx, resp_rx) = oneshot::channel();
+                system_rpc_tx
+                    .try_send((TasksType::ParaUnstake(event.account, event.amount), resp_tx))
+                    .ok();
+                let _res = resp_rx.await.ok();
+            }
+            None => {}
+        }
+    }
+}
+
+/// listen to the unbonded event
+async fn listen_unbonded_event(
+    mut system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
+    relay_subxt_client: &Client<KusamaRuntime>,
+) {
+    let sub = relay_subxt_client
+        .subscribe_finalized_events()
+        .await
+        .unwrap();
+    let decoder = relay_subxt_client.events_decoder();
+    let mut sub = EventSubscription::<KusamaRuntime>::new(sub, &decoder);
+    sub.filter_event::<UnbondedEvent<KusamaRuntime>>();
+    loop {
+        match sub
+            .next()
+            .await
+            .and_then(|result_raw| -> Option<RawEvent> {
+                info!("RawEvent:{:?}", result_raw);
+                result_raw.ok()
+            })
+            .and_then(|raw| -> Option<UnbondedEvent<KusamaRuntime>> {
+                UnbondedEvent::<KusamaRuntime>::decode(&mut &raw.data[..]).ok()
+            }) {
+            Some(event) => {
+                info!("Received Unbonded event: {:?}", &event);
+                let (resp_tx, resp_rx) = oneshot::channel();
+                system_rpc_tx
+                    .try_send((
+                        TasksType::RelayUnbonded(event.account, event.amount),
+                        resp_tx,
+                    ))
+                    .ok();
+                let _res = resp_rx.await.ok();
+            }
+            None => {}
+        }
+    }
+}
+
+/// listen to the withdraw unbonded event
+async fn listen_relay_chain_era(
+    mut system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
+    relay_subxt_client: &Client<KusamaRuntime>,
+) {
+    let mut current_era_index: u32 = 0;
+    loop {
+        let store = kusama::api::CurrentEraStore::<KusamaRuntime> {
+            _runtime: PhantomData,
+        };
+        match relay_subxt_client.fetch(&store, None).await {
+            Ok(era) => {
+                if let Some(era_index) = era {
+                    if era_index != current_era_index {
+                        current_era_index = era_index;
+                        let (resp_tx, resp_rx) = oneshot::channel();
+                        system_rpc_tx
+                            .try_send((
+                                TasksType::RelayEraIndexChanged(current_era_index.clone()),
+                                resp_tx,
+                            ))
+                            .ok();
+                        let _res = resp_rx.await.ok();
+                        info!("Current EraIndex changed {:?}", current_era_index);
+                    }
+                }
+            }
+            Err(e) => {
+                info!("error fetch CurrentEraStore: {:?}", e);
+            }
+        }
     }
 }

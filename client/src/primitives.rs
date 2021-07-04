@@ -21,12 +21,18 @@ pub const MIN_WITHDRAW_BALANCE: u128 = 100_000_000_000_000;
 /// The maximum balance of pool to withdraw.
 pub const MAX_WITHDRAW_BALANCE: u128 = 1000_000_000_000_000;
 
+// todo remove this mock in the future.
+/// Seed for mock
+pub const FOR_MOCK_SEED: &str = "//Eve";
+
+// Relay chain Bonding Duration
+pub const RELAY_CHAIN_ERA_LOCKED: u32 = 28;
+
 /// The tasks type
 pub enum TasksType {
     ParaStake(Amount),
     ParaUnstake(AccountId, Amount),
     RelayUnbonded(AccountId, Amount),
     RelayWithdrawUnbonded(AccountId, Amount),
-    RelayEraIndexChanged(u32),
 }
 pub type Amount = u128;
