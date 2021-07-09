@@ -1,13 +1,11 @@
 use crate::listener;
-use crate::primitives::{AccountId, Amount, TasksType};
+use crate::primitives::{AccountId, Amount, TasksType, FOR_MOCK_SEED};
 use crate::tasks::{
     do_first_finish_processed_unstake, do_first_process_pending_unstake, do_first_withdraw,
     do_last_finish_processed_unstake, do_last_process_pending_unstake, do_last_withdraw,
     wait_transfer_finished,
 };
 
-use async_std::task;
-use core::marker::PhantomData;
 use futures::join;
 use parallel_primitives::{Balance, CurrencyId, PriceWithDecimal};
 use runtime::error::Error;
@@ -15,19 +13,14 @@ use runtime::heiko::runtime::HeikoRuntime;
 use runtime::kusama::{self, runtime::KusamaRuntime as RelayRuntime};
 use sp_core::crypto::Ss58Codec;
 use sp_core::Pair;
-use sp_keyring::AccountKeyring;
-use std::time;
 use substrate_subxt::system::System;
 use substrate_subxt::{Client, ClientBuilder, PairSigner};
 use substrate_subxt::{Error as SubError, Signer};
 use tokio::sync::{mpsc, oneshot};
 
-const RELAY_CHAIN_BOND_SEED: &str = "//Eve";
+// todo remove this mock later.
 const FROM_RELAY_CHAIN_SEED: &str = "//Alice";
 const TO_REPLAY_CHAIN_ADDRESS: &str = "5DjYJStmdZ2rcqXbXGX7TW85JsrW6uG4y9MUcLq2BoPMpRA7";
-const FROM_PARA_CHAIN_SEED: &str = "//Eve";
-// todo change to relay chain Bonding Duration
-const RELAY_CHAIN_ERA_LOCKED: u32 = 1;
 
 pub async fn run(
     threshold: u16,
@@ -112,7 +105,6 @@ pub async fn dispatch(
     // todo put this to database, because this will be lost when the client restart
     let mut unstake_list: Vec<(AccountId, Amount)> = vec![];
     let mut unbonded_list: Vec<(AccountId, Amount)> = vec![];
-    let mut unbonded_era_index_list: Vec<(AccountId, u32)> = vec![];
     loop {
         match system_rpc_rx.recv().await {
             Some((task_type, response)) => match task_type {
@@ -134,32 +126,17 @@ pub async fn dispatch(
                 }
                 TasksType::ParaUnstake(owner, amount) => {
                     println!("[+] Start ParaUnstake task");
-                    let _ = start_unstake_task(&relay_subxt_client, amount.clone(), first.clone())
-                        .await
-                        .map_err(|e| println!("error start_withdraw_task_para: {:?}", e));
-                    response.send(0).unwrap();
+                    // let _ = start_unstake_task(&relay_subxt_client, amount.clone(), first.clone())
+                    //     .await
+                    //     .map_err(|e| println!("error start_withdraw_task_para: {:?}", e));
                     unstake_list.push((owner, amount));
+                    response.send(0).unwrap();
                 }
                 TasksType::RelayUnbonded(agent, amount) => {
                     println!("[+] Start RelayUnbonded task");
                     let mut index = 0;
                     for (owner, a) in unstake_list.clone().into_iter() {
                         if amount == a {
-                            let store = kusama::api::CurrentEraStore::<RelayRuntime> {
-                                _runtime: PhantomData,
-                            };
-                            match relay_subxt_client.fetch(&store, None).await {
-                                Ok(era) => {
-                                    if let Some(era_index) = era {
-                                        let ctrl = AccountKeyring::Eve.to_account_id().into();
-                                        unbonded_era_index_list.push((ctrl, era_index));
-                                    }
-                                }
-                                Err(e) => {
-                                    println!("error fetch CurrentEraStore: {:?}", e);
-                                }
-                            }
-
                             let _ = start_process_pending_unstake_task_para(
                                 &para_subxt_client,
                                 para_signer,
@@ -173,13 +150,13 @@ pub async fn dispatch(
                             )
                             .await
                             .map_err(|e| println!("error start_withdraw_task_para: {:?}", e));
-                            response.send(0).unwrap();
                             unbonded_list.push((owner, amount));
                             break;
                         }
                         index = index + 1
                     }
                     unstake_list.remove(index);
+                    response.send(0).unwrap();
                 }
                 TasksType::RelayWithdrawUnbonded(agent, mut amount) => {
                     println!("[+] Start RelayWithdrawUnbonded task");
@@ -208,16 +185,6 @@ pub async fn dispatch(
                         unbonded_list.remove(i);
                     }
                     response.send(0).unwrap();
-                }
-                TasksType::RelayEraIndexChanged(era_index) => {
-                    println!("[+] Start RelayEraIndexChanged task");
-                    for (_ctr, era) in unbonded_era_index_list.clone().into_iter() {
-                        if era_index.clone() - era >= RELAY_CHAIN_ERA_LOCKED {
-                            let _ = do_relay_withdraw_unbonded(&relay_subxt_client)
-                                .await
-                                .map_err(|e| println!("error do_relay_withdraw_unbonded: {:?}", e));
-                        }
-                    }
                 }
             },
             None => println!("dispatch pending..."),
@@ -374,7 +341,7 @@ async fn transfer_para_from_eve_to_pool(
         "[+] Create para chain transaction from eve to pool, amount:{:?}",
         amount
     );
-    let pair = sp_core::sr25519::Pair::from_string(&FROM_PARA_CHAIN_SEED, None)
+    let pair = sp_core::sr25519::Pair::from_string(&FOR_MOCK_SEED, None)
         .map_err(|_err| SubError::Other("failed to create pair from seed".to_string()))?;
     let signer = PairSigner::<HeikoRuntime, sp_core::sr25519::Pair>::new(pair.clone());
     let pool: sp_runtime::MultiAddress<sp_runtime::AccountId32, u32> = pool_account_id.into();
@@ -417,61 +384,6 @@ async fn transfer_relay_chain_balance(
 
     println!(
         "[+] transfer_relay_chain_balance finished, replay chain call hash {:?}",
-        result
-    );
-    Ok(())
-}
-
-/// start withdraw task, ws_server: ws://127.0.0.1:9944
-pub(crate) async fn start_unstake_task(
-    relay_subxt_client: &Client<RelayRuntime>,
-    amount: Amount,
-    first: bool,
-) -> Result<(), Error> {
-    // controller do unbond, current controller is Eve
-    if first {
-        let _ = do_relay_unbond(&relay_subxt_client, amount.clone()).await?;
-
-        // todo: remove me, it's just for mock
-        task::sleep(time::Duration::from_secs(20)).await;
-        let _ = do_relay_withdraw_unbonded(&relay_subxt_client).await?;
-    } else {
-        // current controller is Eve
-    }
-    Ok(())
-}
-
-async fn do_relay_unbond(subxt_client: &Client<RelayRuntime>, amount: u128) -> Result<(), Error> {
-    println!("[+] Create relay chain unbond transaction");
-    let pair = sp_core::sr25519::Pair::from_string(&RELAY_CHAIN_BOND_SEED, None)
-        .map_err(|_err| SubError::Other("failed to create pair from seed".to_string()))?;
-    let signer = PairSigner::<RelayRuntime, sp_core::sr25519::Pair>::new(pair.clone());
-    let call = kusama::api::staking_unbond_call::<RelayRuntime>(amount);
-    let result = subxt_client.submit(call, &signer).await.map_err(|e| {
-        println!("{:?}", e);
-        SubError::Other("failed to create unbond transaction".to_string())
-    })?;
-
-    println!(
-        "[+] do_relay_unstake finished, replay chain call hash {:?}",
-        result
-    );
-    Ok(())
-}
-
-async fn do_relay_withdraw_unbonded(subxt_client: &Client<RelayRuntime>) -> Result<(), Error> {
-    println!("[+] Create relay chain withdraw unbonded transaction");
-    let pair = sp_core::sr25519::Pair::from_string(&RELAY_CHAIN_BOND_SEED, None)
-        .map_err(|_err| SubError::Other("failed to create pair from seed".to_string()))?;
-    let signer = PairSigner::<RelayRuntime, sp_core::sr25519::Pair>::new(pair.clone());
-    let call = kusama::api::staking_withdraw_unbonded_call::<RelayRuntime>(0);
-    let result = subxt_client.submit(call, &signer).await.map_err(|e| {
-        println!("{:?}", e);
-        SubError::Other("failed to create withdraw unbonded transaction".to_string())
-    })?;
-
-    println!(
-        "[+] do_relay_withdraw_unbonded finished, replay chain call hash {:?}",
         result
     );
     Ok(())

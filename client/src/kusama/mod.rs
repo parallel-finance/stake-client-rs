@@ -9,16 +9,21 @@ use runtime::heiko::{self, runtime::HeikoRuntime};
 use runtime::kusama::{self, runtime::KusamaRuntime};
 use runtime::pallets::multisig::Multisig;
 use sp_core::sr25519::Pair;
-use sp_utils::mpsc::tracing_unbounded;
 use substrate_subxt::{system::System, ClientBuilder, PairSigner};
+use tokio::sync::{mpsc, oneshot};
+
 pub const LISTEN_INTERVAL: u64 = 24000; // 6 * block_time
 pub const TASK_INTERVAL: u64 = 6000;
 pub const MIN_BOND_BALANCE: u128 = 100_000_000_000_000;
+
 pub enum TasksType {
     RelayBond,
     RelayBondExtra,
     ParaRecordRewards(Amount),
     ParaRecordSlash(Amount),
+    ParaUnstake(AccountId, Amount),
+    RelayUnbonded(AccountId, Amount),
+    RelayEraIndexChanged(u32),
 }
 pub type Amount = u128;
 
@@ -37,7 +42,7 @@ pub struct TemporaryCmd {
 
 pub async fn run(cmd: &TemporaryCmd) -> Result<(), Error> {
     // initial relaychain client
-    let subxt_relay_client = ClientBuilder::<KusamaRuntime>::new()
+    let relay_subxt_client = ClientBuilder::<KusamaRuntime>::new()
         .set_url(cmd.relay_ws_server.clone())
         .register_type_size::<<KusamaRuntime as System>::AccountId>("T::AccountId")
         .skip_type_sizes_check()
@@ -51,7 +56,7 @@ pub async fn run(cmd: &TemporaryCmd) -> Result<(), Error> {
     let pair = cmd.relay_key_pair.clone();
     let relay_signer = PairSigner::<KusamaRuntime, Pair>::new(pair);
     // initial parachain client
-    let subxt_para_client = ClientBuilder::<HeikoRuntime>::new()
+    let para_subxt_client = ClientBuilder::<HeikoRuntime>::new()
         .set_url(cmd.para_ws_server.clone())
         .register_type_size::<<KusamaRuntime as System>::AccountId>("T::AccountId")
         .skip_type_sizes_check()
@@ -65,19 +70,20 @@ pub async fn run(cmd: &TemporaryCmd) -> Result<(), Error> {
     let pair = cmd.para_key_pair.clone();
     let para_signer = PairSigner::<HeikoRuntime, Pair>::new(pair);
     // initial channel
-    let (system_rpc_tx, system_rpc_rx) = tracing_unbounded::<TasksType>("mpsc_system_rpc");
+    let (system_rpc_tx, system_rpc_rx) = mpsc::channel::<(TasksType, oneshot::Sender<u64>)>(5);
 
     // initial multi threads to listen on-chain status
     let l = listener::listener(
-        &subxt_relay_client,
+        &relay_subxt_client,
+        &para_subxt_client,
         system_rpc_tx,
         cmd.relay_pool_addr.clone(),
     );
 
     // initial task to receive order and dive
     let t = tasks::dispatch(
-        &subxt_relay_client,
-        &subxt_para_client,
+        &relay_subxt_client,
+        &para_subxt_client,
         &relay_signer,
         &para_signer,
         system_rpc_rx,

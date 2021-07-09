@@ -1,10 +1,9 @@
 use crate::primitives::{AccountId, TasksType, MAX_WITHDRAW_BALANCE, MIN_WITHDRAW_BALANCE};
 use async_std::task;
-use core::marker::PhantomData;
 use futures::join;
 pub use parallel_primitives::CurrencyId;
 use runtime::heiko::{self, runtime::HeikoRuntime};
-use runtime::kusama::{self, runtime::KusamaRuntime as RelayRuntime};
+use runtime::kusama::runtime::KusamaRuntime as RelayRuntime;
 use runtime::pallets::liquid_staking::UnstakedEvent;
 use runtime::pallets::staking::{UnbondedEvent, WithdrawnEvent};
 use sp_core::Decode;
@@ -29,8 +28,7 @@ pub async fn listener(
     let l2 = listen_unstaked_event(system_rpc_tx.clone(), para_subxt_client);
     let l3 = listen_unbonded_event(system_rpc_tx.clone(), relay_subxt_client);
     let l4 = listen_withdraw_unbonded_event(system_rpc_tx.clone(), relay_subxt_client);
-    let l5 = listen_relay_chain_era(system_rpc_tx.clone(), relay_subxt_client);
-    join!(l1, l2, l3, l4, l5);
+    join!(l1, l2, l3, l4);
 }
 
 /// listen to the balance change of pool
@@ -186,40 +184,6 @@ async fn listen_withdraw_unbonded_event(
                 let _res = resp_rx.await.ok();
             }
             None => {}
-        }
-    }
-}
-
-/// listen to the withdraw unbonded event
-async fn listen_relay_chain_era(
-    mut system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
-    relay_subxt_client: &Client<RelayRuntime>,
-) {
-    let mut current_era_index: u32 = 0;
-    loop {
-        let store = kusama::api::CurrentEraStore::<RelayRuntime> {
-            _runtime: PhantomData,
-        };
-        match relay_subxt_client.fetch(&store, None).await {
-            Ok(era) => {
-                if let Some(era_index) = era {
-                    if era_index != current_era_index {
-                        current_era_index = era_index;
-                        let (resp_tx, resp_rx) = oneshot::channel();
-                        system_rpc_tx
-                            .try_send((
-                                TasksType::RelayEraIndexChanged(current_era_index.clone()),
-                                resp_tx,
-                            ))
-                            .ok();
-                        let _res = resp_rx.await.ok();
-                        println!("Current EraIndex changed {:?}", current_era_index);
-                    }
-                }
-            }
-            Err(e) => {
-                println!("error fetch CurrentEraStore: {:?}", e);
-            }
         }
     }
 }
