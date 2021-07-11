@@ -22,8 +22,9 @@ pub const MIN_WITHDRAW_BALANCE: u128 = 1_000_000_000_000;
 pub const MAX_WITHDRAW_BALANCE: u128 = 1000_000_000_000_000;
 
 // todo remove this mock in the future.
-/// Seed for mock
+/// Seeds for mock
 pub const FOR_MOCK_SEED: &str = "//Eve";
+pub const FROM_RELAY_CHAIN_SEED: &str = "//Alice";
 
 // Relay chain Bonding Duration
 pub const RELAY_CHAIN_ERA_LOCKED: u32 = 28;

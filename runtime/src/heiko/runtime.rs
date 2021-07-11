@@ -3,6 +3,7 @@ use super::liquid_staking::LiquidStaking;
 use super::multisig::Multisig;
 use super::orml_tokens::Tokens;
 use super::system::System;
+use crate::pallets::xcm_pallet::XcmPallet;
 pub use parallel_primitives::CurrencyId;
 pub use substrate_subxt::NodeTemplateRuntime as HeikoRuntime;
 
@@ -17,3 +18,5 @@ impl Tokens for HeikoRuntime {
 impl System for HeikoRuntime {}
 
 impl Currencies for HeikoRuntime {}
+
+impl XcmPallet for HeikoRuntime {}

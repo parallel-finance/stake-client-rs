@@ -15,7 +15,7 @@ use runtime::pallets::multisig::Multisig;
 use sp_core::sr25519::Pair;
 use substrate_subxt::{staking::Staking, system::System, ClientBuilder, PairSigner};
 use tokio::sync::{mpsc, oneshot};
-use xcm::v0::MultiLocation;
+use xcm::v0::{MultiLocation, Outcome};
 
 pub const LISTEN_INTERVAL: u64 = 24000; // 6 * block_time
 pub const TASK_INTERVAL: u64 = 6000;
@@ -29,6 +29,7 @@ pub enum TasksType {
     ParaUnstake(AccountId, Amount),
     RelayUnbonded(AccountId, Amount),
     RelayEraIndexChanged(u32),
+    RelayWithdrawUnbonded(AccountId, Amount),
 }
 pub type Amount = u128;
 
@@ -57,6 +58,8 @@ pub async fn run(cmd: &TemporaryCmd) -> Result<(), Error> {
         .register_type_size::<u32>("GroupIndex")
         .register_type_size::<PalletId>("ParaId")
         .register_type_size::<MultiLocation>("MultiLocation")
+        .register_type_size::<Outcome>("xcm::v0::Outcome")
+        .register_type_size::<([u8; 4], u64)>("MessageId")
         .skip_type_sizes_check()
         .build()
         .await
@@ -80,6 +83,7 @@ pub async fn run(cmd: &TemporaryCmd) -> Result<(), Error> {
         .register_type_size::<CurrencyId>("CurrencyId")
         .register_type_size::<PalletId>("ParaId")
         .register_type_size::<MultiLocation>("MultiLocation")
+        .register_type_size::<Outcome>("xcm::v0::Outcome")
         .skip_type_sizes_check()
         .build()
         .await
@@ -93,12 +97,16 @@ pub async fn run(cmd: &TemporaryCmd) -> Result<(), Error> {
     // initial channel
     let (system_rpc_tx, system_rpc_rx) = mpsc::channel::<(TasksType, oneshot::Sender<u64>)>(10);
 
+    // todo put this to database, because this will be lost when the client restart
+    let mut withdraw_unbonded_amount: Amount = 0;
+
     // initial multi threads to listen on-chain status
     let l = listener::listener(
         &relay_subxt_client,
         &para_subxt_client,
         system_rpc_tx,
         cmd.relay_pool_addr.clone(),
+        withdraw_unbonded_amount,
     );
 
     // initial task to receive order and dive
@@ -110,7 +118,9 @@ pub async fn run(cmd: &TemporaryCmd) -> Result<(), Error> {
         system_rpc_rx,
         cmd.relay_multi_other_signatories.clone(),
         cmd.relay_pool_addr.clone(),
+        cmd.para_pool_addr.clone(),
         cmd.first,
+        &mut withdraw_unbonded_amount,
     );
     join!(l, t);
     Ok(())

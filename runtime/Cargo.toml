@@ -30,6 +30,9 @@ thiserror   = "1.0.24"
 frame-system = { git = 'https://github.com/paritytech/substrate.git', branch = 'polkadot-v0.9.2', default-features = false, version = '3.0.0' }
 orml-tokens = { git = 'https://github.com/open-web3-stack/open-runtime-module-library.git', default-features = false, rev = '32666fd'}
 parallel-primitives = { package = "parallel-primitives", git = "https://github.com/parallel-finance/parallel", rev = "2be3347"}
+
+xcm = { git = 'https://github.com/paritytech/polkadot.git', branch = 'release-v0.9.5', default-features = false }
+
 [features]
 default = ["std"]
 std = [

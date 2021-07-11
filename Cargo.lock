@@ -3612,6 +3612,7 @@ dependencies = [
  "substrate-subxt",
  "substrate-subxt-proc-macro 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
+ "xcm",
 ]
 
 [[package]]

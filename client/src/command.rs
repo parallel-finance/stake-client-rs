@@ -87,6 +87,13 @@ pub struct StartRelayCmd {
     )]
     pub relay_pool_addr: String,
 
+    /// pool address of para chain
+    #[structopt(
+        long,
+        default_value = "5EYCAe5iie3Jn5XKaz6Q2bumoE3whfem8PUFtkVzeSq1yLoH"
+    )]
+    pub para_pool_addr: String,
+
     /// the password of keystore
     #[structopt(short, long)]
     pub password: Option<String>,

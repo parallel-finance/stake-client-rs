@@ -10,6 +10,6 @@ pub use super::multisig::{
     multisig_approve_as_multi_call, multisig_as_multi_call, multisig_call_hash, MultisigData,
     MultisigsStore,
 };
-
 pub use super::orml_tokens::AccountsStore;
 pub use super::system::AccountStore;
+pub use super::xcm_pallet::reserve_transfer_assets_call;

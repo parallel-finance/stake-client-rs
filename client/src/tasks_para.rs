@@ -19,10 +19,7 @@ use substrate_subxt::system::System;
 use substrate_subxt::{Client, ClientBuilder, PairSigner};
 use substrate_subxt::{Error as SubError, Signer};
 use tokio::sync::{mpsc, oneshot};
-use xcm::v0::MultiLocation;
-
-const FROM_RELAY_CHAIN_SEED: &str = "//Alice";
-const TO_REPLAY_CHAIN_ADDRESS: &str = "5DjYJStmdZ2rcqXbXGX7TW85JsrW6uG4y9MUcLq2BoPMpRA7";
+use xcm::v0::{MultiLocation, Outcome};
 
 pub async fn run(
     threshold: u16,
@@ -49,6 +46,7 @@ pub async fn run(
         .register_type_size::<CurrencyId>("CurrencyId")
         .register_type_size::<PalletId>("ParaId")
         .register_type_size::<MultiLocation>("MultiLocation")
+        .register_type_size::<Outcome>("xcm::v0::Outcome")
         .skip_type_sizes_check()
         .build()
         .await
@@ -63,6 +61,8 @@ pub async fn run(
         .register_type_size::<u32>("GroupIndex")
         .register_type_size::<PalletId>("ParaId")
         .register_type_size::<MultiLocation>("MultiLocation")
+        .register_type_size::<Outcome>("xcm::v0::Outcome")
+        .register_type_size::<([u8; 4], u64)>("MessageId")
         .skip_type_sizes_check()
         // .register_type_size::<([u8; 20])>("EthereumAddress")
         .build()
@@ -358,35 +358,6 @@ async fn transfer_para_from_eve_to_pool(
 
     println!(
         "[+] transfer_para_from_eve_to_pool finished, para chain call hash {:?}",
-        result
-    );
-    Ok(())
-}
-
-async fn transfer_relay_chain_balance(
-    subxt_client: &Client<RelayRuntime>,
-    amount: u128,
-) -> Result<(), Error> {
-    println!("[+] Create relay chain transaction");
-    // let pair = sp_core::ed25519::Pair::from_string(&FROM_RELAY_CHAIN_SEED, None)
-    //     .map_err(|_err| SubError::Other("failed to create pair from seed".to_string()))?;
-    // let signer = PairSigner::<RelayRuntime, sp_core::ed25519::Pair>::new(pair.clone());
-    // let to_account_id = AccountId::from_string(TO_REPLAY_CHAIN_ADDRESS)
-    let pair = sp_core::sr25519::Pair::from_string(&FROM_RELAY_CHAIN_SEED, None)
-        .map_err(|_err| SubError::Other("failed to create pair from seed".to_string()))?;
-    let signer = PairSigner::<RelayRuntime, sp_core::sr25519::Pair>::new(pair.clone());
-    let to_account_id = AccountId::from_string(TO_REPLAY_CHAIN_ADDRESS)
-        .map_err(|_| SubError::Other("invalid replay address".to_string()))?;
-    let ai: sp_runtime::MultiAddress<sp_runtime::AccountId32, u32> = to_account_id.into();
-
-    let call = kusama::api::balances_transfer_call::<RelayRuntime>(&ai, amount);
-    let result = subxt_client.submit(call, &signer).await.map_err(|e| {
-        println!("{:?}", e);
-        SubError::Other("failed to create transaction".to_string())
-    })?;
-
-    println!(
-        "[+] transfer_relay_chain_balance finished, replay chain call hash {:?}",
         result
     );
     Ok(())
