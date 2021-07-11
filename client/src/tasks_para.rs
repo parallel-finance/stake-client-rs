@@ -21,7 +21,6 @@ use substrate_subxt::{Error as SubError, Signer};
 use tokio::sync::{mpsc, oneshot};
 use xcm::v0::MultiLocation;
 
-// todo remove this mock later.
 const FROM_RELAY_CHAIN_SEED: &str = "//Alice";
 const TO_REPLAY_CHAIN_ADDRESS: &str = "5DjYJStmdZ2rcqXbXGX7TW85JsrW6uG4y9MUcLq2BoPMpRA7";
 
@@ -90,7 +89,6 @@ pub async fn run(
     let t = dispatch(
         system_rpc_rx,
         &para_subxt_client,
-        &relay_subxt_client,
         &para_signer,
         multi_account_id,
         pool_account_id,
@@ -105,7 +103,6 @@ pub async fn run(
 pub async fn dispatch(
     mut system_rpc_rx: mpsc::Receiver<(TasksType, oneshot::Sender<u64>)>,
     para_subxt_client: &Client<HeikoRuntime>,
-    relay_subxt_client: &Client<RelayRuntime>,
     para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
     multi_account_id: AccountId,
     pool_account_id: AccountId,
@@ -123,7 +120,6 @@ pub async fn dispatch(
                     println!("[+] Start ParaStake task");
                     let _ = start_withdraw_task_para(
                         &para_subxt_client,
-                        &relay_subxt_client,
                         para_signer,
                         multi_account_id.clone(),
                         threshold.clone(),
@@ -210,7 +206,6 @@ pub async fn dispatch(
 /// start withdraw task
 pub(crate) async fn start_withdraw_task_para(
     para_subxt_client: &Client<HeikoRuntime>,
-    relay_subxt_client: &Client<RelayRuntime>,
     para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
     multi_account_id: AccountId,
     threshold: u16,
@@ -219,7 +214,7 @@ pub(crate) async fn start_withdraw_task_para(
     first: bool,
 ) -> Result<(), Error> {
     if first {
-        let call_hash = do_first_withdraw(
+        let _call_hash = do_first_withdraw(
             others.clone(),
             &para_subxt_client,
             para_signer,
@@ -228,11 +223,9 @@ pub(crate) async fn start_withdraw_task_para(
             threshold.clone(),
         )
         .await?;
-        let _ =
-            wait_transfer_finished(&para_subxt_client, multi_account_id.clone(), call_hash).await?;
         println!("[+] Create withdraw transaction finished");
     } else {
-        let call_hash = do_last_withdraw(
+        let _call_hash = do_last_withdraw(
             others.clone(),
             multi_account_id.clone(),
             &para_subxt_client,
@@ -241,13 +234,7 @@ pub(crate) async fn start_withdraw_task_para(
             threshold.clone(),
         )
         .await?;
-        let _ =
-            wait_transfer_finished(&para_subxt_client, multi_account_id.clone(), call_hash).await?;
         println!("[+] Create withdraw transaction finished");
-
-        // // todo this is just mock: transfer relay chain amount from one address to other
-        // let _ = transfer_relay_chain_balance(&relay_subxt_client, amount.clone()).await?;
-        // println!("[+] Create mock relay transaction finished");
     }
     Ok(())
 }

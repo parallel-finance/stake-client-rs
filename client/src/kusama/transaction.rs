@@ -464,15 +464,12 @@ pub(crate) async fn do_relay_unbond(
         .map_err(|_err| SubError::Other("failed to create pair from seed".to_string()))?;
     let signer = PairSigner::<KusamaRuntime, sp_core::sr25519::Pair>::new(pair.clone());
     let call = kusama::api::staking_unbond_call::<KusamaRuntime>(amount);
-    let result = subxt_client.submit(call, &signer).await.map_err(|e| {
+    let result = subxt_client.watch(call, &signer).await.map_err(|e| {
         info!("do_relay_unbond error {:?}", e);
         SubError::Other("failed to create unbond transaction".to_string())
     })?;
 
-    info!(
-        "do_relay_unstake finished, replay chain call hash {:?}",
-        result
-    );
+    info!("Replay chain call result {:?}", result);
     Ok(())
 }
 
@@ -491,10 +488,7 @@ pub(crate) async fn do_relay_withdraw_unbonded(
             SubError::Other("failed to create withdraw unbonded transaction".to_string())
         })?;
 
-        info!(
-            "do_relay_withdraw_unbonded finished, replay chain call hash {:?}",
-            result
-        );
+        info!("Replay chain call result {:?}", result);
     }
     Ok(())
 }

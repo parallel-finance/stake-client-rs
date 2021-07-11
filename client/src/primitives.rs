@@ -16,7 +16,7 @@ pub type AccountPublic = <Signature as Verify>::Signer;
 pub type AccountId = <AccountPublic as IdentifyAccount>::AccountId;
 
 /// The minimum balance of pool to withdraw.
-pub const MIN_WITHDRAW_BALANCE: u128 = 100_000_000_000_000;
+pub const MIN_WITHDRAW_BALANCE: u128 = 1_000_000_000_000;
 
 /// The maximum balance of pool to withdraw.
 pub const MAX_WITHDRAW_BALANCE: u128 = 1000_000_000_000_000;
