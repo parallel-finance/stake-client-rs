@@ -243,6 +243,7 @@ pub(crate) async fn do_first_withdraw(
     others: Vec<AccountId>,
     subxt_client: &Client<HeikoRuntime>,
     signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
+    multi_account_id: AccountId,
     amount: Amount,
     threshold: u16,
 ) -> Result<[u8; 32], Error> {
@@ -250,8 +251,9 @@ pub(crate) async fn do_first_withdraw(
 
     println!("---------- start create multi-signature transaction ----------");
     // 1.1 construct balance transfer call
-    let dest = AccountKeyring::Eve.to_account_id().into();
-    let inner_call = heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(dest, amount);
+    // let dest = AccountKeyring::Eve.to_account_id().into();
+    let inner_call =
+        heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(multi_account_id, amount);
     let inner_call_encoded = subxt_client
         .encode(inner_call)
         .map_err(|e| Error::SubxtError(e))?;
@@ -299,8 +301,9 @@ pub(crate) async fn do_last_withdraw(
     println!("[+] Crate last withdraw transaction");
     println!("---------- start create multi-signature transaction ----------");
     // 1.1 construct balance transfer call
-    let dest = AccountKeyring::Eve.to_account_id().into();
-    let inner_call = heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(dest, amount);
+    // let dest = AccountKeyring::Eve.to_account_id().into();
+    let inner_call =
+        heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(multi_account_id.clone(), amount);
 
     let inner_call_encoded = subxt_client
         .encode(inner_call)

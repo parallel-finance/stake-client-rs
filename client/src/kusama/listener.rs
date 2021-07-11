@@ -1,8 +1,8 @@
 use super::kusama;
 use super::KusamaRuntime;
 use super::TasksType;
-use super::LISTEN_INTERVAL;
 use super::MIN_BOND_BALANCE;
+use super::{LISTEN_INTERVAL, TASK_INTERVAL};
 
 use async_std::task;
 use core::marker::PhantomData;
@@ -56,8 +56,8 @@ async fn listen_agent_balance(
         stash: account_id.clone(),
     };
 
+    info!("loop listen balance");
     loop {
-        info!("loop listen balance");
         match subxt_relay_client.fetch(&account, None).await {
             Ok(account_store) => {
                 info!(
@@ -77,13 +77,13 @@ async fn listen_agent_balance(
                             Some(_bond) => {
                                 system_rpc_tx
                                     .clone()
-                                    .try_send((TasksType::RelayBond, resp_tx))
+                                    .try_send((TasksType::RelayBondExtra, resp_tx))
                                     .ok();
                             }
                             None => {
                                 system_rpc_tx
                                     .clone()
-                                    .try_send((TasksType::RelayBondExtra, resp_tx))
+                                    .try_send((TasksType::RelayBond, resp_tx))
                                     .ok();
                             }
                         }
@@ -115,21 +115,24 @@ async fn listen_reward(
     sub.filter_event::<RewardEvent<_>>();
     loop {
         info!("loop listen_reward");
-        let (resp_tx, resp_rx) = oneshot::channel();
-        let _ = sub
+        match sub
             .next()
             .await
             .and_then(|result_raw| -> Option<RawEvent> { result_raw.ok() })
             .and_then(|raw| -> Option<RewardEvent<KusamaRuntime>> {
                 RewardEvent::<KusamaRuntime>::decode(&mut &raw.data[..]).ok()
-            })
-            .and_then(|event| -> Option<()> {
+            }) {
+            Some(event) => {
                 info!("Receive Event: {:?}", &event);
+                let (resp_tx, resp_rx) = oneshot::channel();
                 system_rpc_tx
                     .try_send((TasksType::ParaRecordRewards(event.amount), resp_tx))
-                    .ok()
-            });
-        let _res = resp_rx.await.ok();
+                    .ok();
+                let _res = resp_rx.await.ok();
+                info!("Record reword event finished");
+            }
+            None => {}
+        }
     }
 }
 
@@ -146,21 +149,24 @@ async fn listen_slash(
     sub.filter_event::<SlashEvent<_>>();
     loop {
         info!("loop listen_slash");
-        let (resp_tx, resp_rx) = oneshot::channel();
-        let _ = sub
+        match sub
             .next()
             .await
             .and_then(|result_raw| -> Option<RawEvent> { result_raw.ok() })
             .and_then(|raw| -> Option<SlashEvent<KusamaRuntime>> {
                 SlashEvent::<KusamaRuntime>::decode(&mut &raw.data[..]).ok()
-            })
-            .and_then(|event| -> Option<()> {
+            }) {
+            Some(event) => {
                 info!("Receive Event: {:?}", &event);
+                let (resp_tx, resp_rx) = oneshot::channel();
                 system_rpc_tx
                     .try_send((TasksType::ParaRecordSlash(event.amount), resp_tx))
-                    .ok()
-            });
-        let _res = resp_rx.await.ok();
+                    .ok();
+                let _res = resp_rx.await.ok();
+                info!("Record slash event finished");
+            }
+            None => {}
+        }
     }
 }
 
@@ -177,23 +183,25 @@ async fn listen_unstaked_event(
     let mut sub = EventSubscription::<HeikoRuntime>::new(sub, &decoder);
     sub.filter_event::<UnstakedEvent<HeikoRuntime>>();
     loop {
+        info!("loop listen unstaked event");
         match sub
             .next()
             .await
             .and_then(|result_raw| -> Option<RawEvent> {
-                println!("RawEvent:{:?}", result_raw);
                 result_raw.ok()
             })
             .and_then(|raw| -> Option<UnstakedEvent<HeikoRuntime>> {
                 UnstakedEvent::<HeikoRuntime>::decode(&mut &raw.data[..]).ok()
             }) {
             Some(event) => {
-                println!("[+] Received Unstaked event: {:?}", &event);
+                info!("Received Unstaked event: {:?}", &event);
                 let (resp_tx, resp_rx) = oneshot::channel();
                 system_rpc_tx
                     .try_send((TasksType::ParaUnstake(event.account, event.amount), resp_tx))
                     .ok();
                 let _res = resp_rx.await.ok();
+
+                info!("Unstaked event processed");
             }
             None => {}
         }
@@ -213,11 +221,11 @@ async fn listen_unbonded_event(
     let mut sub = EventSubscription::<KusamaRuntime>::new(sub, &decoder);
     sub.filter_event::<UnbondedEvent<KusamaRuntime>>();
     loop {
+        info!("loop listen unbonded event");
         match sub
             .next()
             .await
             .and_then(|result_raw| -> Option<RawEvent> {
-                info!("RawEvent:{:?}", result_raw);
                 result_raw.ok()
             })
             .and_then(|raw| -> Option<UnbondedEvent<KusamaRuntime>> {
@@ -245,6 +253,7 @@ async fn listen_relay_chain_era(
     relay_subxt_client: &Client<KusamaRuntime>,
 ) {
     let mut current_era_index: u32 = 0;
+    info!("loop listen relay chain era");
     loop {
         let store = kusama::api::CurrentEraStore::<KusamaRuntime> {
             _runtime: PhantomData,
@@ -270,5 +279,6 @@ async fn listen_relay_chain_era(
                 info!("error fetch CurrentEraStore: {:?}", e);
             }
         }
+        task::sleep(Duration::from_millis(TASK_INTERVAL)).await;
     }
 }

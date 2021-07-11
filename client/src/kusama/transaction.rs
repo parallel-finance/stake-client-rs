@@ -478,20 +478,23 @@ pub(crate) async fn do_relay_unbond(
 
 pub(crate) async fn do_relay_withdraw_unbonded(
     subxt_client: &Client<KusamaRuntime>,
+    first: bool,
 ) -> Result<(), Error> {
-    info!("Create relay chain withdraw unbonded transaction");
-    let pair = sp_core::sr25519::Pair::from_string(&FOR_MOCK_SEED, None)
-        .map_err(|_err| SubError::Other("failed to create pair from seed".to_string()))?;
-    let signer = PairSigner::<KusamaRuntime, sp_core::sr25519::Pair>::new(pair.clone());
-    let call = kusama::api::staking_withdraw_unbonded_call::<KusamaRuntime>(0);
-    let result = subxt_client.submit(call, &signer).await.map_err(|e| {
-        println!("{:?}", e);
-        SubError::Other("failed to create withdraw unbonded transaction".to_string())
-    })?;
+    if first {
+        info!("Create relay chain withdraw unbonded transaction");
+        let pair = sp_core::sr25519::Pair::from_string(&FOR_MOCK_SEED, None)
+            .map_err(|_err| SubError::Other("failed to create pair from seed".to_string()))?;
+        let signer = PairSigner::<KusamaRuntime, sp_core::sr25519::Pair>::new(pair.clone());
+        let call = kusama::api::staking_withdraw_unbonded_call::<KusamaRuntime>(0);
+        let result = subxt_client.submit(call, &signer).await.map_err(|e| {
+            println!("{:?}", e);
+            SubError::Other("failed to create withdraw unbonded transaction".to_string())
+        })?;
 
-    info!(
-        "do_relay_withdraw_unbonded finished, replay chain call hash {:?}",
-        result
-    );
+        info!(
+            "do_relay_withdraw_unbonded finished, replay chain call hash {:?}",
+            result
+        );
+    }
     Ok(())
 }

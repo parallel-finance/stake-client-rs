@@ -123,6 +123,7 @@ async fn listen_unbonded_event(
     let mut sub = EventSubscription::<RelayRuntime>::new(sub, &decoder);
     sub.filter_event::<UnbondedEvent<RelayRuntime>>();
     loop {
+        println!("listen_unbonded_event");
         match sub
             .next()
             .await

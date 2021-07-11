@@ -27,12 +27,13 @@ pub async fn dispatch(
     pool_addr: String,
     first: bool,
 ) {
+    let mut unbonded_era_index_list: Vec<(AccountId, u32)> = vec![];
     loop {
         // try_next won't go on util finish this task
-        let mut unbonded_era_index_list: Vec<(AccountId, u32)> = vec![];
         match system_rpc_rx.recv().await {
             Some((task_type, response)) => match task_type {
                 TasksType::RelayBond => {
+                    info!("Start bond task");
                     relay_bond(
                         relay_subxt_client,
                         relay_signer,
@@ -44,6 +45,7 @@ pub async fn dispatch(
                     response.send(0).unwrap();
                 }
                 TasksType::RelayBondExtra => {
+                    info!("Start bond extra task");
                     relay_bond_extra(
                         relay_subxt_client,
                         relay_signer,
@@ -55,6 +57,7 @@ pub async fn dispatch(
                     response.send(0).unwrap();
                 }
                 TasksType::ParaRecordRewards(amount) => {
+                    info!("Start record rewards task");
                     para_record_rewards(
                         para_subxt_client,
                         para_signer,
@@ -67,6 +70,7 @@ pub async fn dispatch(
                     response.send(0).unwrap();
                 }
                 TasksType::ParaRecordSlash(amount) => {
+                    info!("Start record slash task");
                     para_record_slash(
                         para_subxt_client,
                         para_signer,
@@ -78,10 +82,12 @@ pub async fn dispatch(
                     .await;
                 }
                 TasksType::ParaUnstake(_account_id, amount) => {
+                    info!("Start unbond task");
                     start_unstake_task(&relay_subxt_client, amount.clone(), first.clone()).await;
                     response.send(0).unwrap();
                 }
                 TasksType::RelayUnbonded(_agent, _amount) => {
+                    info!("Found Unbonded event");
                     let store = kusama::api::CurrentEraStore::<KusamaRuntime> {
                         _runtime: PhantomData,
                     };
@@ -89,6 +95,7 @@ pub async fn dispatch(
                         Ok(era) => {
                             if let Some(era_index) = era {
                                 let ctrl = AccountKeyring::Eve.to_account_id().into();
+                                info!("Record Unbonded era index:{:?}", era_index);
                                 unbonded_era_index_list.push((ctrl, era_index));
                             }
                         }
@@ -102,7 +109,7 @@ pub async fn dispatch(
                     info!("Start RelayEraIndexChanged task");
                     for (_ctr, era) in unbonded_era_index_list.clone().into_iter() {
                         if era_index.clone() - era >= RELAY_CHAIN_ERA_LOCKED {
-                            let _ = do_relay_withdraw_unbonded(&relay_subxt_client)
+                            let _ = do_relay_withdraw_unbonded(&relay_subxt_client, first)
                                 .await
                                 .map_err(|e| info!("error do_relay_withdraw_unbonded: {:?}", e));
                         }
@@ -253,11 +260,11 @@ pub(crate) async fn start_unstake_task(
             .await
             .map_err(|e| warn!("error do_relay_unbond: {:?}", e));
 
-        // todo: remove me, it's just for mock
-        task::sleep(time::Duration::from_secs(20)).await;
-
-        let _ = do_relay_withdraw_unbonded(&relay_subxt_client)
-            .await
-            .map_err(|e| warn!("error do_relay_withdraw_unbonded: {:?}", e));
+        // // todo: remove me, it's just for mock
+        // task::sleep(time::Duration::from_secs(20)).await;
+        //
+        // let _ = do_relay_withdraw_unbonded(&relay_subxt_client)
+        //     .await
+        //     .map_err(|e| warn!("error do_relay_withdraw_unbonded: {:?}", e));
     }
 }
