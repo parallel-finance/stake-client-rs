@@ -10,7 +10,7 @@ use crate::kusama::transaction::{
 };
 use crate::primitives::RELAY_CHAIN_ERA_LOCKED;
 
-use async_std::task;
+use async_std::{sync::Arc, task};
 use core::marker::PhantomData;
 use log::{info, warn};
 use runtime::kusama;
@@ -29,7 +29,7 @@ pub async fn dispatch(
     relay_pool_addr: String,
     para_pool_addr: String,
     first: bool,
-    withdraw_unbonded_amount: &mut Amount,
+    mut withdraw_unbonded_amount: Arc<u128>,
 ) {
     // todo put this to database, because this will be lost when the client restart
     let mut unbonded_era_index_list: Vec<(AccountId, u32, Amount)> = vec![];
@@ -112,9 +112,11 @@ pub async fn dispatch(
                 }
                 TasksType::RelayEraIndexChanged(era_index) => {
                     info!("Start RelayEraIndexChanged task");
+
                     for (_ctr, era, amount) in unbonded_era_index_list.clone().into_iter() {
                         if era_index.clone() - era >= RELAY_CHAIN_ERA_LOCKED {
-                            *withdraw_unbonded_amount = *withdraw_unbonded_amount + amount;
+                            *Arc::make_mut(&mut withdraw_unbonded_amount) += amount;
+                            info!("withdraw unbonded amount {:?}", withdraw_unbonded_amount);
                             let _ = do_relay_withdraw_unbonded(&relay_subxt_client, first)
                                 .await
                                 .map_err(|e| info!("error do_relay_withdraw_unbonded: {:?}", e));
@@ -134,7 +136,8 @@ pub async fn dispatch(
                     .await
                     .map_err(|e| info!("error do_xcm_transfer_to_para_chain: {:?}", e));
 
-                    *withdraw_unbonded_amount = *withdraw_unbonded_amount - amount;
+                    *Arc::make_mut(&mut withdraw_unbonded_amount) -= amount;
+                    info!("withdraw unbonded amount {:?}", withdraw_unbonded_amount);
                 }
             },
             None => info!("dispatch pending..."),

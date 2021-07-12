@@ -5,6 +5,7 @@ mod transaction;
 use crate::error::Error;
 use crate::primitives::AccountId;
 
+use async_std::sync::Arc;
 use frame_support::PalletId;
 use futures::join;
 use log::error;
@@ -59,6 +60,7 @@ pub async fn run(cmd: &TemporaryCmd) -> Result<(), Error> {
         .register_type_size::<PalletId>("ParaId")
         .register_type_size::<MultiLocation>("MultiLocation")
         .register_type_size::<Outcome>("xcm::v0::Outcome")
+        .register_type_size::<Outcome>("Outcome")
         .register_type_size::<([u8; 4], u64)>("MessageId")
         .skip_type_sizes_check()
         .build()
@@ -84,6 +86,8 @@ pub async fn run(cmd: &TemporaryCmd) -> Result<(), Error> {
         .register_type_size::<PalletId>("ParaId")
         .register_type_size::<MultiLocation>("MultiLocation")
         .register_type_size::<Outcome>("xcm::v0::Outcome")
+        .register_type_size::<Outcome>("Outcome")
+        .register_type_size::<([u8; 4], u64)>("MessageId")
         .skip_type_sizes_check()
         .build()
         .await
@@ -98,7 +102,7 @@ pub async fn run(cmd: &TemporaryCmd) -> Result<(), Error> {
     let (system_rpc_tx, system_rpc_rx) = mpsc::channel::<(TasksType, oneshot::Sender<u64>)>(10);
 
     // todo put this to database, because this will be lost when the client restart
-    let mut withdraw_unbonded_amount: Amount = 0;
+    let mut withdraw_unbonded_amount: Arc<u128> = Arc::new(0);
 
     // initial multi threads to listen on-chain status
     let l = listener::listener(
@@ -106,7 +110,7 @@ pub async fn run(cmd: &TemporaryCmd) -> Result<(), Error> {
         &para_subxt_client,
         system_rpc_tx,
         cmd.relay_pool_addr.clone(),
-        withdraw_unbonded_amount,
+        Arc::clone(&withdraw_unbonded_amount),
     );
 
     // initial task to receive order and dive
@@ -120,7 +124,7 @@ pub async fn run(cmd: &TemporaryCmd) -> Result<(), Error> {
         cmd.relay_pool_addr.clone(),
         cmd.para_pool_addr.clone(),
         cmd.first,
-        &mut withdraw_unbonded_amount,
+        Arc::clone(&withdraw_unbonded_amount),
     );
     join!(l, t);
     Ok(())

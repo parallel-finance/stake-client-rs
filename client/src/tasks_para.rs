@@ -6,6 +6,7 @@ use crate::tasks::{
     wait_transfer_finished,
 };
 
+use async_std::sync::Arc;
 use frame_support::PalletId;
 use futures::join;
 use parallel_primitives::{Balance, CurrencyId, PriceWithDecimal};
@@ -47,6 +48,8 @@ pub async fn run(
         .register_type_size::<PalletId>("ParaId")
         .register_type_size::<MultiLocation>("MultiLocation")
         .register_type_size::<Outcome>("xcm::v0::Outcome")
+        .register_type_size::<Outcome>("Outcome")
+        .register_type_size::<([u8; 4], u64)>("MessageId")
         .skip_type_sizes_check()
         .build()
         .await
@@ -62,6 +65,7 @@ pub async fn run(
         .register_type_size::<PalletId>("ParaId")
         .register_type_size::<MultiLocation>("MultiLocation")
         .register_type_size::<Outcome>("xcm::v0::Outcome")
+        .register_type_size::<Outcome>("Outcome")
         .register_type_size::<([u8; 4], u64)>("MessageId")
         .skip_type_sizes_check()
         // .register_type_size::<([u8; 20])>("EthereumAddress")
@@ -74,7 +78,10 @@ pub async fn run(
     let para_signer = PairSigner::<HeikoRuntime, sp_core::sr25519::Pair>::new(pair.clone());
 
     // initial channel
-    let (system_rpc_tx, system_rpc_rx) = mpsc::channel::<(TasksType, oneshot::Sender<u64>)>(5);
+    let (system_rpc_tx, system_rpc_rx) = mpsc::channel::<(TasksType, oneshot::Sender<u64>)>(10);
+
+    // todo put this to database, because this will be lost when the client restart
+    let mut withdraw_unbonded_amount: Arc<u128> = Arc::new(0);
 
     // initial multi threads to listen on-chain status
     let l = listener::listener(
@@ -83,6 +90,7 @@ pub async fn run(
         &relay_subxt_client,
         pool_account_id.clone(),
         currency_id.clone(),
+        &withdraw_unbonded_amount,
     );
 
     // initial task to receive order and dive
@@ -95,6 +103,7 @@ pub async fn run(
         threshold,
         others,
         first,
+        Arc::clone(&withdraw_unbonded_amount),
     );
     join!(l, t);
     Ok(())
@@ -109,6 +118,7 @@ pub async fn dispatch(
     threshold: u16,
     others: Vec<AccountId>,
     first: bool,
+    mut withdraw_unbonded_amount: Arc<u128>,
 ) {
     // todo put this to database, because this will be lost when the client restart
     let mut unstake_list: Vec<(AccountId, Amount)> = vec![];
@@ -117,7 +127,7 @@ pub async fn dispatch(
         match system_rpc_rx.recv().await {
             Some((task_type, response)) => match task_type {
                 TasksType::ParaStake(amount) => {
-                    println!("[+] Start ParaStake task");
+                    println!("[+] Start withdraw task");
                     let _ = start_withdraw_task_para(
                         &para_subxt_client,
                         para_signer,
@@ -133,14 +143,11 @@ pub async fn dispatch(
                 }
                 TasksType::ParaUnstake(owner, amount) => {
                     println!("[+] Start ParaUnstake task");
-                    // let _ = start_unstake_task(&relay_subxt_client, amount.clone(), first.clone())
-                    //     .await
-                    //     .map_err(|e| println!("error start_withdraw_task_para: {:?}", e));
                     unstake_list.push((owner, amount));
                     response.send(0).unwrap();
                 }
                 TasksType::RelayUnbonded(agent, amount) => {
-                    println!("[+] Start RelayUnbonded task");
+                    println!("[+] Start process pending unstake task");
                     let mut index = 0;
                     let mut found = false;
                     for (owner, a) in unstake_list.clone().into_iter() {
@@ -158,7 +165,7 @@ pub async fn dispatch(
                                 first.clone(),
                             )
                             .await
-                            .map_err(|e| println!("error start_withdraw_task_para: {:?}", e));
+                            .map_err(|e| println!("process pending unstake task error: {:?}", e));
                             unbonded_list.push((owner, amount));
                             break;
                         }
@@ -170,7 +177,7 @@ pub async fn dispatch(
                     response.send(0).unwrap();
                 }
                 TasksType::RelayWithdrawUnbonded(agent, mut amount) => {
-                    println!("[+] Start RelayWithdrawUnbonded task");
+                    println!("[+] Start finish processed unstake task");
                     let mut count = 0;
                     for (owner, a) in unbonded_list.clone().into_iter() {
                         if amount >= a {
@@ -187,10 +194,19 @@ pub async fn dispatch(
                                 first.clone(),
                             )
                             .await
-                            .map_err(|e| println!("error start_withdraw_task_para: {:?}", e));
+                            .map_err(|e| println!("finish processed unstake task error: {:?}", e));
                         }
                         amount = amount - a;
                         count = count + 1;
+                        println!(
+                            "########## withdraw_unbonded_amount:{:?} - a:{:?}",
+                            withdraw_unbonded_amount, a
+                        );
+                        *Arc::make_mut(&mut withdraw_unbonded_amount) -= a;
+                        println!(
+                            "########## after - withdraw_unbonded_amount:{:?}",
+                            withdraw_unbonded_amount
+                        );
                     }
                     for i in (count - 1)..0 {
                         unbonded_list.remove(i);
@@ -289,7 +305,7 @@ pub(crate) async fn start_finish_processed_unstake_task_para(
     para_subxt_client: &Client<HeikoRuntime>,
     para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
     multi_account_id: AccountId,
-    pool_account_id: AccountId,
+    _pool_account_id: AccountId,
     threshold: u16,
     others: Vec<AccountId>,
     agent: AccountId,
@@ -298,11 +314,6 @@ pub(crate) async fn start_finish_processed_unstake_task_para(
     first: bool,
 ) -> Result<(), Error> {
     if first {
-        // transfer from eve to multi-address first
-        // todo move it out from here and use XCM
-        let _ = transfer_para_from_eve_to_pool(&para_subxt_client, pool_account_id, amount.clone())
-            .await?;
-
         let call_hash = do_first_finish_processed_unstake(
             others.clone(),
             &para_subxt_client,

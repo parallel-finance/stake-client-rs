@@ -480,11 +480,17 @@ pub(crate) async fn do_first_finish_processed_unstake(
 
     // 1.2 initial the multisg call
     let result = subxt_client.watch(mc, signer).await?;
-    println!("multisig_approve_as_multi_call result {:?}", result);
+    println!(
+        "[finish_processed_unstake] multisig_approve_as_multi_call result {:?}",
+        result
+    );
 
     // get account_id of multi address
     let call_hash = kusama::api::multisig_call_hash(subxt_client, sudo_call)?;
-    println!("call hash {:?}", format!("0x{}", hex::encode(call_hash)));
+    println!(
+        "[finish_processed_unstake] call hash {:?}",
+        format!("0x{}", hex::encode(call_hash))
+    );
     println!("---------- end create multi-signature transaction ----------");
     Ok(call_hash)
 }
@@ -539,7 +545,10 @@ pub(crate) async fn do_last_finish_processed_unstake(
 
     // 1.2 initial the multisg call
     let result = subxt_client.watch(mc, signer).await?;
-    println!("multisig_as_multi_call result {:?}", result);
+    println!(
+        "[finish_processed_unstake] multisig_as_multi_call result {:?}",
+        result
+    );
     println!("---------- end create multi-signature transaction ----------");
     Ok(call_hash)
 }

@@ -5,7 +5,7 @@ use super::MIN_BOND_BALANCE;
 use super::{LISTEN_INTERVAL, TASK_INTERVAL};
 use crate::primitives::Amount;
 
-use async_std::task;
+use async_std::{sync::Arc, task};
 use core::marker::PhantomData;
 use futures::join;
 use log::{debug, error, info};
@@ -23,7 +23,7 @@ pub async fn listener(
     para_subxt_client: &Client<HeikoRuntime>,
     system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
     pool_addr: String,
-    withdraw_unbonded_amount: Amount,
+    withdraw_unbonded_amount: Arc<u128>,
 ) {
     // start future-1 listening relaychain multisig-account balance
     let l1 = listen_agent_balance(
@@ -48,7 +48,7 @@ async fn listen_agent_balance(
     subxt_relay_client: Client<KusamaRuntime>,
     system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
     pool_addr: String,
-    withdraw_unbonded_amount: Amount,
+    withdraw_unbonded_amount: Arc<u128>,
 ) {
     let account_id: <KusamaRuntime as System>::AccountId =
         sp_core::ed25519::Public::from_str(&pool_addr)
@@ -77,7 +77,12 @@ async fn listen_agent_balance(
                     let free = account_store.data.free;
                     let misc_frozen = account_store.data.misc_frozen;
                     //for now, make the loop interval longer.
-                    if free - misc_frozen >= MIN_BOND_BALANCE + withdraw_unbonded_amount {
+                    if free - misc_frozen >= MIN_BOND_BALANCE + *withdraw_unbonded_amount {
+                        info!(
+                            "free - misc_frozen:{:?}, withdraw_unbonded_amount:{:?}",
+                            free - misc_frozen,
+                            withdraw_unbonded_amount
+                        );
                         match bond_controller {
                             Some(_bond) => {
                                 system_rpc_tx
