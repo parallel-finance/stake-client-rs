@@ -243,6 +243,7 @@ pub(crate) async fn do_first_withdraw(
     others: Vec<AccountId>,
     subxt_client: &Client<HeikoRuntime>,
     signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
+    multi_account_id: AccountId,
     amount: Amount,
     threshold: u16,
 ) -> Result<[u8; 32], Error> {
@@ -250,8 +251,9 @@ pub(crate) async fn do_first_withdraw(
 
     println!("---------- start create multi-signature transaction ----------");
     // 1.1 construct balance transfer call
-    let dest = AccountKeyring::Eve.to_account_id().into();
-    let inner_call = heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(dest, amount);
+    // let dest = AccountKeyring::Eve.to_account_id().into();
+    let inner_call =
+        heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(multi_account_id, amount);
     let inner_call_encoded = subxt_client
         .encode(inner_call)
         .map_err(|e| Error::SubxtError(e))?;
@@ -271,8 +273,8 @@ pub(crate) async fn do_first_withdraw(
         )?;
 
     // 1.2 initial the multisg call
-    let result = subxt_client.submit(mc, signer).await?;
-    println!("multisig_approve_as_multi_call hash {:?}", result);
+    let result = subxt_client.watch(mc, signer).await?;
+    println!("multisig_approve_as_multi_call result {:?}", result);
 
     // get account_id of multi address
     let call_hash = kusama::api::multisig_call_hash(subxt_client, sudo_call)?;
@@ -299,8 +301,9 @@ pub(crate) async fn do_last_withdraw(
     println!("[+] Crate last withdraw transaction");
     println!("---------- start create multi-signature transaction ----------");
     // 1.1 construct balance transfer call
-    let dest = AccountKeyring::Eve.to_account_id().into();
-    let inner_call = heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(dest, amount);
+    // let dest = AccountKeyring::Eve.to_account_id().into();
+    let inner_call =
+        heiko::api::liquid_staking_withdraw_call::<HeikoRuntime>(multi_account_id.clone(), amount);
 
     let inner_call_encoded = subxt_client
         .encode(inner_call)
@@ -333,8 +336,8 @@ pub(crate) async fn do_last_withdraw(
     )?;
 
     // 1.2 initial the multisg call
-    let result = subxt_client.submit(mc, signer).await?;
-    println!("multisig_as_multi_call hash {:?}", result);
+    let result = subxt_client.watch(mc, signer).await?;
+    println!("multisig_as_multi_call result {:?}", result);
     println!("---------- end create multi-signature transaction ----------");
     Ok(call_hash)
 }
@@ -375,8 +378,8 @@ pub(crate) async fn do_first_process_pending_unstake(
         )?;
 
     // 1.2 initial the multisg call
-    let result = subxt_client.submit(mc, signer).await?;
-    println!("multisig_approve_as_multi_call hash {:?}", result);
+    let result = subxt_client.watch(mc, signer).await?;
+    println!("multisig_approve_as_multi_call result {:?}", result);
 
     // get account_id of multi address
     let call_hash = kusama::api::multisig_call_hash(subxt_client, sudo_call)?;
@@ -434,8 +437,8 @@ pub(crate) async fn do_last_process_pending_unstake(
     )?;
 
     // 1.2 initial the multisg call
-    let result = subxt_client.submit(mc, signer).await?;
-    println!("multisig_as_multi_call hash {:?}", result);
+    let result = subxt_client.watch(mc, signer).await?;
+    println!("multisig_as_multi_call result {:?}", result);
     println!("---------- end create multi-signature transaction ----------");
     Ok(call_hash)
 }
@@ -476,8 +479,8 @@ pub(crate) async fn do_first_finish_processed_unstake(
         )?;
 
     // 1.2 initial the multisg call
-    let result = subxt_client.submit(mc, signer).await?;
-    println!("multisig_approve_as_multi_call hash {:?}", result);
+    let result = subxt_client.watch(mc, signer).await?;
+    println!("multisig_approve_as_multi_call result {:?}", result);
 
     // get account_id of multi address
     let call_hash = kusama::api::multisig_call_hash(subxt_client, sudo_call)?;
@@ -535,8 +538,8 @@ pub(crate) async fn do_last_finish_processed_unstake(
     )?;
 
     // 1.2 initial the multisg call
-    let result = subxt_client.submit(mc, signer).await?;
-    println!("multisig_as_multi_call hash {:?}", result);
+    let result = subxt_client.watch(mc, signer).await?;
+    println!("multisig_as_multi_call result {:?}", result);
     println!("---------- end create multi-signature transaction ----------");
     Ok(call_hash)
 }
@@ -599,8 +602,6 @@ pub(crate) async fn wait_transfer_finished(
 ) -> Result<(), Error> {
     // todo check if the transaction is in block
     println!("transferring, waiting...");
-    thread::sleep(time::Duration::from_secs(6));
-
     loop {
         let store = kusama::api::MultisigsStore::<HeikoRuntime> {
             multisig_account: account_id.clone(),

@@ -9,3 +9,4 @@ pub use super::staking::{
     staking_withdraw_unbonded_call, BondExtraCall, BondedStore, CurrentEraStore, UnbondCall,
 };
 pub use super::system::AccountStore;
+pub use super::xcm_pallet::reserve_transfer_assets_call;

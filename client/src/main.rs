@@ -150,7 +150,7 @@ impl StartRelayCmd {
             relay_key_pair: pair.clone(),
             para_key_pair: pair.clone(),
             relay_pool_addr: self.relay_pool_addr.clone(),
-            para_pool_addr: "NULL".to_string(),
+            para_pool_addr: self.para_pool_addr.to_string(),
             relay_multi_other_signatories: other_signatories.clone(),
             para_multi_other_signatories: other_signatories.clone(),
             first: self.first,

@@ -6,6 +6,7 @@ use crate::tasks::{
     wait_transfer_finished,
 };
 
+use frame_support::PalletId;
 use futures::join;
 use parallel_primitives::{Balance, CurrencyId, PriceWithDecimal};
 use runtime::error::Error;
@@ -13,14 +14,12 @@ use runtime::heiko::runtime::HeikoRuntime;
 use runtime::kusama::{self, runtime::KusamaRuntime as RelayRuntime};
 use sp_core::crypto::Ss58Codec;
 use sp_core::Pair;
+use substrate_subxt::staking::Staking;
 use substrate_subxt::system::System;
 use substrate_subxt::{Client, ClientBuilder, PairSigner};
 use substrate_subxt::{Error as SubError, Signer};
 use tokio::sync::{mpsc, oneshot};
-
-// todo remove this mock later.
-const FROM_RELAY_CHAIN_SEED: &str = "//Alice";
-const TO_REPLAY_CHAIN_ADDRESS: &str = "5DjYJStmdZ2rcqXbXGX7TW85JsrW6uG4y9MUcLq2BoPMpRA7";
+use xcm::v0::{MultiLocation, Outcome};
 
 pub async fn run(
     threshold: u16,
@@ -44,6 +43,10 @@ pub async fn run(
         .register_type_size::<Balance>("T::Balance")
         .register_type_size::<CurrencyId>("T::OracleKey")
         .register_type_size::<PriceWithDecimal>("T::OracleValue")
+        .register_type_size::<CurrencyId>("CurrencyId")
+        .register_type_size::<PalletId>("ParaId")
+        .register_type_size::<MultiLocation>("MultiLocation")
+        .register_type_size::<Outcome>("xcm::v0::Outcome")
         .skip_type_sizes_check()
         .build()
         .await
@@ -53,6 +56,13 @@ pub async fn run(
     let relay_subxt_client = ClientBuilder::<RelayRuntime>::new()
         .set_url(relay_ws_server)
         .register_type_size::<<RelayRuntime as System>::AccountId>("T::AccountId")
+        .register_type_size::<<RelayRuntime as Staking>::CandidateReceipt>("CandidateReceipt<Hash>")
+        .register_type_size::<u32>("CoreIndex")
+        .register_type_size::<u32>("GroupIndex")
+        .register_type_size::<PalletId>("ParaId")
+        .register_type_size::<MultiLocation>("MultiLocation")
+        .register_type_size::<Outcome>("xcm::v0::Outcome")
+        .register_type_size::<([u8; 4], u64)>("MessageId")
         .skip_type_sizes_check()
         // .register_type_size::<([u8; 20])>("EthereumAddress")
         .build()
@@ -79,7 +89,6 @@ pub async fn run(
     let t = dispatch(
         system_rpc_rx,
         &para_subxt_client,
-        &relay_subxt_client,
         &para_signer,
         multi_account_id,
         pool_account_id,
@@ -94,7 +103,6 @@ pub async fn run(
 pub async fn dispatch(
     mut system_rpc_rx: mpsc::Receiver<(TasksType, oneshot::Sender<u64>)>,
     para_subxt_client: &Client<HeikoRuntime>,
-    relay_subxt_client: &Client<RelayRuntime>,
     para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
     multi_account_id: AccountId,
     pool_account_id: AccountId,
@@ -112,7 +120,6 @@ pub async fn dispatch(
                     println!("[+] Start ParaStake task");
                     let _ = start_withdraw_task_para(
                         &para_subxt_client,
-                        &relay_subxt_client,
                         para_signer,
                         multi_account_id.clone(),
                         threshold.clone(),
@@ -135,8 +142,10 @@ pub async fn dispatch(
                 TasksType::RelayUnbonded(agent, amount) => {
                     println!("[+] Start RelayUnbonded task");
                     let mut index = 0;
+                    let mut found = false;
                     for (owner, a) in unstake_list.clone().into_iter() {
                         if amount == a {
+                            found = true;
                             let _ = start_process_pending_unstake_task_para(
                                 &para_subxt_client,
                                 para_signer,
@@ -155,7 +164,9 @@ pub async fn dispatch(
                         }
                         index = index + 1
                     }
-                    unstake_list.remove(index);
+                    if found {
+                        unstake_list.remove(index);
+                    }
                     response.send(0).unwrap();
                 }
                 TasksType::RelayWithdrawUnbonded(agent, mut amount) => {
@@ -195,7 +206,6 @@ pub async fn dispatch(
 /// start withdraw task
 pub(crate) async fn start_withdraw_task_para(
     para_subxt_client: &Client<HeikoRuntime>,
-    relay_subxt_client: &Client<RelayRuntime>,
     para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
     multi_account_id: AccountId,
     threshold: u16,
@@ -204,19 +214,18 @@ pub(crate) async fn start_withdraw_task_para(
     first: bool,
 ) -> Result<(), Error> {
     if first {
-        let call_hash = do_first_withdraw(
+        let _call_hash = do_first_withdraw(
             others.clone(),
             &para_subxt_client,
             para_signer,
+            multi_account_id.clone(),
             amount.clone(),
             threshold.clone(),
         )
         .await?;
-        let _ =
-            wait_transfer_finished(&para_subxt_client, multi_account_id.clone(), call_hash).await?;
         println!("[+] Create withdraw transaction finished");
     } else {
-        let call_hash = do_last_withdraw(
+        let _call_hash = do_last_withdraw(
             others.clone(),
             multi_account_id.clone(),
             &para_subxt_client,
@@ -225,13 +234,7 @@ pub(crate) async fn start_withdraw_task_para(
             threshold.clone(),
         )
         .await?;
-        let _ =
-            wait_transfer_finished(&para_subxt_client, multi_account_id.clone(), call_hash).await?;
         println!("[+] Create withdraw transaction finished");
-
-        // todo this is just mock: transfer relay chain amount from one address to other
-        let _ = transfer_relay_chain_balance(&relay_subxt_client, amount.clone()).await?;
-        println!("[+] Create mock relay transaction finished");
     }
     Ok(())
 }
@@ -355,35 +358,6 @@ async fn transfer_para_from_eve_to_pool(
 
     println!(
         "[+] transfer_para_from_eve_to_pool finished, para chain call hash {:?}",
-        result
-    );
-    Ok(())
-}
-
-async fn transfer_relay_chain_balance(
-    subxt_client: &Client<RelayRuntime>,
-    amount: u128,
-) -> Result<(), Error> {
-    println!("[+] Create relay chain transaction");
-    // let pair = sp_core::ed25519::Pair::from_string(&FROM_RELAY_CHAIN_SEED, None)
-    //     .map_err(|_err| SubError::Other("failed to create pair from seed".to_string()))?;
-    // let signer = PairSigner::<RelayRuntime, sp_core::ed25519::Pair>::new(pair.clone());
-    // let to_account_id = AccountId::from_string(TO_REPLAY_CHAIN_ADDRESS)
-    let pair = sp_core::sr25519::Pair::from_string(&FROM_RELAY_CHAIN_SEED, None)
-        .map_err(|_err| SubError::Other("failed to create pair from seed".to_string()))?;
-    let signer = PairSigner::<RelayRuntime, sp_core::sr25519::Pair>::new(pair.clone());
-    let to_account_id = AccountId::from_string(TO_REPLAY_CHAIN_ADDRESS)
-        .map_err(|_| SubError::Other("invalid replay address".to_string()))?;
-    let ai: sp_runtime::MultiAddress<sp_runtime::AccountId32, u32> = to_account_id.into();
-
-    let call = kusama::api::balances_transfer_call::<RelayRuntime>(&ai, amount);
-    let result = subxt_client.submit(call, &signer).await.map_err(|e| {
-        println!("{:?}", e);
-        SubError::Other("failed to create transaction".to_string())
-    })?;
-
-    println!(
-        "[+] transfer_relay_chain_balance finished, replay chain call hash {:?}",
         result
     );
     Ok(())

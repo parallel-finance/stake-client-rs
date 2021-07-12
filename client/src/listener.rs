@@ -12,6 +12,7 @@ use substrate_subxt::{Client, EventSubscription, RawEvent};
 use tokio::sync::{mpsc, oneshot};
 
 const LISTEN_INTERVAL: u64 = 5; // 5 sec
+const LISTEN_WAIT_INTERVAL: u64 = 60; // 60 sec
 pub async fn listener(
     system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
     para_subxt_client: &Client<HeikoRuntime>,
@@ -63,6 +64,7 @@ pub(crate) async fn listen_pool_balance(
                                 .ok();
                             let _res = resp_rx.await.ok();
                         }
+                        task::sleep(time::Duration::from_secs(LISTEN_WAIT_INTERVAL)).await;
                     }
                 }
             }
@@ -123,6 +125,7 @@ async fn listen_unbonded_event(
     let mut sub = EventSubscription::<RelayRuntime>::new(sub, &decoder);
     sub.filter_event::<UnbondedEvent<RelayRuntime>>();
     loop {
+        println!("listen_unbonded_event");
         match sub
             .next()
             .await

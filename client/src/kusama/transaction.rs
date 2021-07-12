@@ -7,13 +7,14 @@ use super::HeikoRuntime;
 use super::KusamaRuntime;
 use super::Multisig;
 use super::MIN_BOND_BALANCE;
-use crate::primitives::FOR_MOCK_SEED;
+use crate::primitives::{FOR_MOCK_SEED, FROM_RELAY_CHAIN_SEED};
 
 use async_std::task;
 use core::marker::PhantomData;
 use log::{info, warn};
 use runtime::pallets::liquid_staking::{RecordRewardsCall, RecordSlashCall};
 use runtime::pallets::multisig::Timepoint;
+use runtime::pallets::xcm_pallet::ReserveTransferAssetsCall;
 use sp_core::{crypto::Ss58Codec, Pair};
 use sp_keyring::AccountKeyring;
 use std::str::FromStr;
@@ -21,6 +22,7 @@ use std::time::Duration;
 use substrate_subxt::{
     staking, sudo, Call, Client, Error as SubError, ExtrinsicSuccess, PairSigner, Runtime, Signer,
 };
+use xcm::v0::{Junction, MultiAsset, MultiLocation, NetworkId};
 
 /// The first wallet to call withdraw. No need use 'TimePoint' and call 'approve_as_multi'.
 pub(crate) async fn do_first_relay_bond(
@@ -464,34 +466,73 @@ pub(crate) async fn do_relay_unbond(
         .map_err(|_err| SubError::Other("failed to create pair from seed".to_string()))?;
     let signer = PairSigner::<KusamaRuntime, sp_core::sr25519::Pair>::new(pair.clone());
     let call = kusama::api::staking_unbond_call::<KusamaRuntime>(amount);
-    let result = subxt_client.submit(call, &signer).await.map_err(|e| {
+    let result = subxt_client.watch(call, &signer).await.map_err(|e| {
         info!("do_relay_unbond error {:?}", e);
         SubError::Other("failed to create unbond transaction".to_string())
     })?;
 
-    info!(
-        "do_relay_unstake finished, replay chain call hash {:?}",
-        result
-    );
+    info!("Replay chain call result {:?}", result);
     Ok(())
 }
 
 pub(crate) async fn do_relay_withdraw_unbonded(
     subxt_client: &Client<KusamaRuntime>,
+    first: bool,
 ) -> Result<(), Error> {
-    info!("Create relay chain withdraw unbonded transaction");
-    let pair = sp_core::sr25519::Pair::from_string(&FOR_MOCK_SEED, None)
-        .map_err(|_err| SubError::Other("failed to create pair from seed".to_string()))?;
-    let signer = PairSigner::<KusamaRuntime, sp_core::sr25519::Pair>::new(pair.clone());
-    let call = kusama::api::staking_withdraw_unbonded_call::<KusamaRuntime>(0);
-    let result = subxt_client.submit(call, &signer).await.map_err(|e| {
-        println!("{:?}", e);
-        SubError::Other("failed to create withdraw unbonded transaction".to_string())
-    })?;
+    if first {
+        info!("Create relay chain withdraw unbonded transaction");
+        let pair = sp_core::sr25519::Pair::from_string(&FOR_MOCK_SEED, None)
+            .map_err(|_err| SubError::Other("failed to create pair from seed".to_string()))?;
+        let signer = PairSigner::<KusamaRuntime, sp_core::sr25519::Pair>::new(pair.clone());
+        let call = kusama::api::staking_withdraw_unbonded_call::<KusamaRuntime>(0);
+        let result = subxt_client.watch(call, &signer).await.map_err(|e| {
+            println!("{:?}", e);
+            SubError::Other("failed to create withdraw unbonded transaction".to_string())
+        })?;
 
-    info!(
-        "do_relay_withdraw_unbonded finished, replay chain call hash {:?}",
-        result
-    );
+        info!("Replay chain call result {:?}", result);
+    }
+    Ok(())
+}
+
+pub(crate) async fn do_xcm_transfer_to_para_chain(
+    subxt_client: &Client<KusamaRuntime>,
+    pool_addr: String,
+    amount: Amount,
+    first: bool,
+) -> Result<(), Error> {
+    if first {
+        info!("do_first_para_record_slash");
+        let pool_account_id = AccountId::from_string(&pool_addr)
+            .map_err(|_e| Error::Other("parse pool_addr to account id error".to_string()))?;
+
+        info!("Create relay chain xcm reserve transfer assets transaction");
+        let pair = sp_core::sr25519::Pair::from_string(&FROM_RELAY_CHAIN_SEED, None)
+            .map_err(|_err| SubError::Other("failed to create pair from seed".to_string()))?;
+        let signer = PairSigner::<KusamaRuntime, sp_core::sr25519::Pair>::new(pair.clone());
+
+        let dest = MultiLocation::X1(Junction::Parachain(2000));
+        let beneficiary = MultiLocation::X1(Junction::AccountId32 {
+            network: NetworkId::Any,
+            id: pool_account_id.into(),
+        });
+        let assets = vec![MultiAsset::ConcreteFungible {
+            id: MultiLocation::Null,
+            amount,
+        }];
+        let call = kusama::api::reserve_transfer_assets_call::<KusamaRuntime>(
+            dest,
+            beneficiary,
+            assets,
+            100_000_000,
+        );
+        let result = subxt_client.watch(call, &signer).await.map_err(|e| {
+            println!("{:?}", e);
+            SubError::Other("failed to create xcm reserve transfer assets transaction".to_string())
+        })?;
+
+        info!("Replay chain call result {:?}", result);
+    }
+
     Ok(())
 }
