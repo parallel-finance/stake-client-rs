@@ -6,7 +6,8 @@ use crate::tasks::{
     wait_transfer_finished,
 };
 
-use async_std::sync::Arc;
+use async_std::sync::{Arc, Mutex};
+use core::marker::PhantomData;
 use frame_support::PalletId;
 use futures::join;
 use parallel_primitives::{Balance, CurrencyId, PriceWithDecimal};
@@ -81,7 +82,7 @@ pub async fn run(
     let (system_rpc_tx, system_rpc_rx) = mpsc::channel::<(TasksType, oneshot::Sender<u64>)>(10);
 
     // todo put this to database, because this will be lost when the client restart
-    let mut withdraw_unbonded_amount: Arc<u128> = Arc::new(0);
+    let withdraw_unbonded_amount = Arc::new(Mutex::new(0));
 
     // initial multi threads to listen on-chain status
     let l = listener::listener(
@@ -90,20 +91,21 @@ pub async fn run(
         &relay_subxt_client,
         pool_account_id.clone(),
         currency_id.clone(),
-        &withdraw_unbonded_amount,
+        withdraw_unbonded_amount.clone(),
     );
 
     // initial task to receive order and dive
     let t = dispatch(
         system_rpc_rx,
         &para_subxt_client,
+        &relay_subxt_client,
         &para_signer,
         multi_account_id,
         pool_account_id,
         threshold,
         others,
         first,
-        Arc::clone(&withdraw_unbonded_amount),
+        withdraw_unbonded_amount.clone(),
     );
     join!(l, t);
     Ok(())
@@ -112,13 +114,14 @@ pub async fn run(
 pub async fn dispatch(
     mut system_rpc_rx: mpsc::Receiver<(TasksType, oneshot::Sender<u64>)>,
     para_subxt_client: &Client<HeikoRuntime>,
+    relay_subxt_client: &Client<RelayRuntime>,
     para_signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
     multi_account_id: AccountId,
     pool_account_id: AccountId,
     threshold: u16,
     others: Vec<AccountId>,
     first: bool,
-    mut withdraw_unbonded_amount: Arc<u128>,
+    mut withdraw_unbonded_amount: Arc<Mutex<u128>>,
 ) {
     // todo put this to database, because this will be lost when the client restart
     let mut unstake_list: Vec<(AccountId, Amount)> = vec![];
@@ -153,21 +156,34 @@ pub async fn dispatch(
                     for (owner, a) in unstake_list.clone().into_iter() {
                         if amount == a {
                             found = true;
-                            let _ = start_process_pending_unstake_task_para(
-                                &para_subxt_client,
-                                para_signer,
-                                multi_account_id.clone(),
-                                threshold.clone(),
-                                others.clone(),
-                                agent.clone(),
-                                owner.clone(),
-                                amount.clone(),
-                                first.clone(),
-                            )
-                            .await
-                            .map_err(|e| println!("process pending unstake task error: {:?}", e));
-                            unbonded_list.push((owner, amount));
-                            break;
+
+                            // get era_index
+                            match get_era_index(relay_subxt_client).await {
+                                Ok(era) => {
+                                    let _ = start_process_pending_unstake_task_para(
+                                        &para_subxt_client,
+                                        para_signer,
+                                        multi_account_id.clone(),
+                                        threshold.clone(),
+                                        others.clone(),
+                                        agent.clone(),
+                                        owner.clone(),
+                                        era.clone(),
+                                        amount.clone(),
+                                        first.clone(),
+                                    )
+                                    .await
+                                    .map_err(|e| {
+                                        println!("process pending unstake task error: {:?}", e)
+                                    });
+                                    unbonded_list.push((owner, amount));
+                                    break;
+                                }
+                                Err(e) => {
+                                    println!("fetch CurrentEraStore error : {:?}", e);
+                                    break;
+                                }
+                            }
                         }
                         index = index + 1
                     }
@@ -180,42 +196,75 @@ pub async fn dispatch(
                     println!("[+] Start finish processed unstake task");
                     let mut count = 0;
                     for (owner, a) in unbonded_list.clone().into_iter() {
-                        if amount >= a {
-                            let _ = start_finish_processed_unstake_task_para(
-                                &para_subxt_client,
-                                para_signer,
-                                multi_account_id.clone(),
-                                pool_account_id.clone(),
-                                threshold.clone(),
-                                others.clone(),
-                                agent.clone(),
-                                owner.clone(),
-                                amount.clone(),
-                                first.clone(),
-                            )
-                            .await
-                            .map_err(|e| println!("finish processed unstake task error: {:?}", e));
+                        if amount < a {
+                            break;
                         }
-                        amount = amount - a;
-                        count = count + 1;
-                        println!(
-                            "########## withdraw_unbonded_amount:{:?} - a:{:?}",
-                            withdraw_unbonded_amount, a
-                        );
-                        *Arc::make_mut(&mut withdraw_unbonded_amount) -= a;
-                        println!(
-                            "########## after - withdraw_unbonded_amount:{:?}",
-                            withdraw_unbonded_amount
-                        );
+
+                        match start_finish_processed_unstake_task_para(
+                            &para_subxt_client,
+                            para_signer,
+                            multi_account_id.clone(),
+                            pool_account_id.clone(),
+                            threshold.clone(),
+                            others.clone(),
+                            agent.clone(),
+                            owner.clone(),
+                            amount.clone(),
+                            first.clone(),
+                        )
+                        .await
+                        {
+                            Ok(_result) => {
+                                println!(" finish processed unstake succeed");
+                                println!("#### amount:{} a:{}", amount, a);
+                                amount -= a;
+                                count = count + 1;
+                                println!(
+                                    "########## withdraw_unbonded_amount:{:?} - a:{:?}",
+                                    withdraw_unbonded_amount, a
+                                );
+                                *withdraw_unbonded_amount.lock().await -= a;
+                                println!(
+                                    "########## after - withdraw_unbonded_amount:{:?}",
+                                    withdraw_unbonded_amount
+                                );
+                            }
+                            Err(e) => {
+                                println!("finish processed unstake task error: {:?}", e);
+                                break;
+                            }
+                        };
                     }
-                    for i in (count - 1)..0 {
-                        unbonded_list.remove(i);
+                    if count != 0 {
+                        for i in (count - 1)..0 {
+                            unbonded_list.remove(i);
+                        }
                     }
                     response.send(0).unwrap();
                 }
             },
             None => println!("dispatch pending..."),
         }
+    }
+}
+
+async fn get_era_index(relay_subxt_client: &Client<RelayRuntime>) -> Result<u32, Error> {
+    let store = kusama::api::CurrentEraStore::<RelayRuntime> {
+        _runtime: PhantomData,
+    };
+    match relay_subxt_client.fetch(&store, None).await {
+        Ok(era) => {
+            if let Some(era_index) = era {
+                Ok(era_index)
+            } else {
+                Err(Error::SubxtError(SubError::Other(
+                    "invalid era index".to_string(),
+                )))
+            }
+        }
+        Err(e) => Err(Error::SubxtError(SubError::Other(
+            "failed to fetch era index".to_string(),
+        ))),
     }
 }
 
@@ -264,6 +313,7 @@ pub(crate) async fn start_process_pending_unstake_task_para(
     others: Vec<AccountId>,
     agent: AccountId,
     owner: AccountId,
+    era_index: u32,
     amount: Amount,
     first: bool,
 ) -> Result<(), Error> {
@@ -274,6 +324,7 @@ pub(crate) async fn start_process_pending_unstake_task_para(
             para_signer,
             agent,
             owner,
+            era_index.clone(),
             amount.clone(),
             threshold.clone(),
         )
@@ -289,6 +340,7 @@ pub(crate) async fn start_process_pending_unstake_task_para(
             para_signer,
             agent,
             owner,
+            era_index.clone(),
             amount.clone(),
             threshold.clone(),
         )

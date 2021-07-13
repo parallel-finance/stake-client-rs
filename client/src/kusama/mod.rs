@@ -5,7 +5,7 @@ mod transaction;
 use crate::error::Error;
 use crate::primitives::AccountId;
 
-use async_std::sync::Arc;
+use async_std::sync::{Arc, Mutex};
 use frame_support::PalletId;
 use futures::join;
 use log::error;
@@ -102,7 +102,7 @@ pub async fn run(cmd: &TemporaryCmd) -> Result<(), Error> {
     let (system_rpc_tx, system_rpc_rx) = mpsc::channel::<(TasksType, oneshot::Sender<u64>)>(10);
 
     // todo put this to database, because this will be lost when the client restart
-    let mut withdraw_unbonded_amount: Arc<u128> = Arc::new(0);
+    let withdraw_unbonded_amount = Arc::new(Mutex::new(0));
 
     // initial multi threads to listen on-chain status
     let l = listener::listener(
@@ -110,7 +110,7 @@ pub async fn run(cmd: &TemporaryCmd) -> Result<(), Error> {
         &para_subxt_client,
         system_rpc_tx,
         cmd.relay_pool_addr.clone(),
-        Arc::clone(&withdraw_unbonded_amount),
+        withdraw_unbonded_amount.clone(),
     );
 
     // initial task to receive order and dive
@@ -124,7 +124,7 @@ pub async fn run(cmd: &TemporaryCmd) -> Result<(), Error> {
         cmd.relay_pool_addr.clone(),
         cmd.para_pool_addr.clone(),
         cmd.first,
-        Arc::clone(&withdraw_unbonded_amount),
+        withdraw_unbonded_amount.clone(),
     );
     join!(l, t);
     Ok(())

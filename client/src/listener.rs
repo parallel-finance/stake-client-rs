@@ -1,9 +1,10 @@
-use crate::primitives::{
-    AccountId, TasksType, MAX_WITHDRAW_BALANCE, MIN_WITHDRAW_BALANCE, XCM_DEST_WEIGHT,
-};
+use crate::primitives::{AccountId, TasksType, MAX_WITHDRAW_BALANCE, MIN_WITHDRAW_BALANCE};
 pub use parallel_primitives::CurrencyId;
 
-use async_std::{sync::Arc, task};
+use async_std::{
+    sync::{Arc, Mutex},
+    task,
+};
 use futures::join;
 use runtime::heiko::{self, runtime::HeikoRuntime};
 use runtime::kusama::runtime::KusamaRuntime as RelayRuntime;
@@ -23,21 +24,21 @@ pub async fn listener(
     relay_subxt_client: &Client<RelayRuntime>,
     pool_account_id: AccountId,
     currency_id: CurrencyId,
-    withdraw_unbonded_amount: &Arc<u128>,
+    withdraw_unbonded_amount: Arc<Mutex<u128>>,
 ) {
     let l1 = listen_pool_balance(
         system_rpc_tx.clone(),
         para_subxt_client,
         pool_account_id.clone(),
         currency_id.clone(),
-        Arc::clone(withdraw_unbonded_amount),
+        withdraw_unbonded_amount.clone(),
     );
     let l2 = listen_unstaked_event(system_rpc_tx.clone(), para_subxt_client);
     let l3 = listen_unbonded_event(system_rpc_tx.clone(), relay_subxt_client);
     let l4 = listen_withdraw_unbonded_event(
         system_rpc_tx.clone(),
         relay_subxt_client,
-        Arc::clone(withdraw_unbonded_amount),
+        withdraw_unbonded_amount.clone(),
     );
     join!(l1, l2, l3, l4);
 }
@@ -48,7 +49,7 @@ pub(crate) async fn listen_pool_balance(
     para_subxt_client: &Client<HeikoRuntime>,
     pool_account_id: AccountId,
     currency_id: CurrencyId,
-    withdraw_unbonded_amount: Arc<u128>,
+    withdraw_unbonded_amount: Arc<Mutex<u128>>,
 ) {
     let store = heiko::api::AccountsStore::<HeikoRuntime> {
         account: pool_account_id,
@@ -59,20 +60,18 @@ pub(crate) async fn listen_pool_balance(
             Ok(r) => {
                 if let Some(account_info) = r {
                     let balance = account_info.free - account_info.frozen;
-                    if balance >= MIN_WITHDRAW_BALANCE + *withdraw_unbonded_amount {
+                    if balance >= MIN_WITHDRAW_BALANCE + *withdraw_unbonded_amount.lock().await {
                         println!(
                             "########## listen_pool_balance withdraw_unbonded_amount: {:?}",
                             withdraw_unbonded_amount
                         );
                         println!("[+] Pool's amount is {:?}， need to withdraw", balance);
                         let (resp_tx, resp_rx) = oneshot::channel();
-                        if balance - *withdraw_unbonded_amount < MAX_WITHDRAW_BALANCE {
+                        let wa = *withdraw_unbonded_amount.lock().await;
+                        if balance - wa < MAX_WITHDRAW_BALANCE {
                             system_rpc_tx
                                 .clone()
-                                .try_send((
-                                    TasksType::ParaStake(balance - *withdraw_unbonded_amount),
-                                    resp_tx,
-                                ))
+                                .try_send((TasksType::ParaStake(balance - wa), resp_tx))
                                 .ok();
                             let _res = resp_rx.await.ok();
                         } else {
@@ -173,7 +172,7 @@ async fn listen_unbonded_event(
 async fn listen_withdraw_unbonded_event(
     mut system_rpc_tx: mpsc::Sender<(TasksType, oneshot::Sender<u64>)>,
     relay_subxt_client: &Client<RelayRuntime>,
-    mut withdraw_unbonded_amount: Arc<u128>,
+    withdraw_unbonded_amount: Arc<Mutex<u128>>,
 ) {
     let sub = relay_subxt_client
         .subscribe_finalized_events()
@@ -196,21 +195,18 @@ async fn listen_withdraw_unbonded_event(
             Some(event) => {
                 println!("[+] Received Withdrawn event: {:?}", &event);
                 let (resp_tx, resp_rx) = oneshot::channel();
-                *Arc::make_mut(&mut withdraw_unbonded_amount) += event.amount - XCM_DEST_WEIGHT;
+                *withdraw_unbonded_amount.lock().await += event.amount;
                 println!(
                     "########## after + withdraw_unbonded_amount:{:?}",
                     withdraw_unbonded_amount
                 );
 
-                // todo need to wait until asset has been transfered to pool address.
-                task::sleep(time::Duration::from_secs(LISTEN_WAIT_INTERVAL)).await;
+                //todo need to wait until asset has been transfered to pool address.
+                // task::sleep(time::Duration::from_secs(LISTEN_WAIT_INTERVAL)).await;
 
                 system_rpc_tx
                     .try_send((
-                        TasksType::RelayWithdrawUnbonded(
-                            event.account,
-                            event.amount - XCM_DEST_WEIGHT,
-                        ),
+                        TasksType::RelayWithdrawUnbonded(event.account, event.amount),
                         resp_tx,
                     ))
                     .ok();

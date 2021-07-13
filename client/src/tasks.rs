@@ -349,6 +349,7 @@ pub(crate) async fn do_first_process_pending_unstake(
     signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
     agent: AccountId,
     owner: AccountId,
+    era_index: u32,
     amount: Amount,
     threshold: u16,
 ) -> Result<[u8; 32], Error> {
@@ -357,7 +358,7 @@ pub(crate) async fn do_first_process_pending_unstake(
     println!("---------- start create multi-signature transaction ----------");
     // 1.1 construct balance transfer call
     let inner_call = heiko::api::liquid_staking_process_pending_unstake_call::<HeikoRuntime>(
-        agent, owner, amount,
+        agent, owner, era_index, amount,
     );
     let inner_call_encoded = subxt_client
         .encode(inner_call)
@@ -396,6 +397,7 @@ pub(crate) async fn do_last_process_pending_unstake(
     signer: &(dyn Signer<HeikoRuntime> + Send + Sync),
     agent: AccountId,
     owner: AccountId,
+    era_index: u32,
     amount: Amount,
     threshold: u16,
 ) -> Result<[u8; 32], Error> {
@@ -403,7 +405,7 @@ pub(crate) async fn do_last_process_pending_unstake(
     println!("---------- start create multi-signature transaction ----------");
     // construct process pending unstake call
     let inner_call = heiko::api::liquid_staking_process_pending_unstake_call::<HeikoRuntime>(
-        agent, owner, amount,
+        agent, owner, era_index, amount,
     );
 
     let inner_call_encoded = subxt_client

@@ -10,7 +10,10 @@ use crate::kusama::transaction::{
 };
 use crate::primitives::RELAY_CHAIN_ERA_LOCKED;
 
-use async_std::{sync::Arc, task};
+use async_std::{
+    sync::{Arc, Mutex},
+    task,
+};
 use core::marker::PhantomData;
 use log::{info, warn};
 use runtime::kusama;
@@ -29,7 +32,7 @@ pub async fn dispatch(
     relay_pool_addr: String,
     para_pool_addr: String,
     first: bool,
-    mut withdraw_unbonded_amount: Arc<u128>,
+    mut withdraw_unbonded_amount: Arc<Mutex<u128>>,
 ) {
     // todo put this to database, because this will be lost when the client restart
     let mut unbonded_era_index_list: Vec<(AccountId, u32, Amount)> = vec![];
@@ -49,6 +52,7 @@ pub async fn dispatch(
                     .await;
                     response.send(0).unwrap();
                 }
+
                 TasksType::RelayBondExtra => {
                     info!("Start bond extra task");
                     relay_bond_extra(
@@ -61,6 +65,7 @@ pub async fn dispatch(
                     .await;
                     response.send(0).unwrap();
                 }
+
                 TasksType::ParaRecordRewards(amount) => {
                     info!("Start record rewards task");
                     para_record_rewards(
@@ -74,6 +79,7 @@ pub async fn dispatch(
                     .await;
                     response.send(0).unwrap();
                 }
+
                 TasksType::ParaRecordSlash(amount) => {
                     info!("Start record slash task");
                     para_record_slash(
@@ -86,11 +92,13 @@ pub async fn dispatch(
                     )
                     .await;
                 }
+
                 TasksType::ParaUnstake(_account_id, amount) => {
                     info!("Start unbond task");
                     start_unstake_task(&relay_subxt_client, amount.clone(), first.clone()).await;
                     response.send(0).unwrap();
                 }
+
                 TasksType::RelayUnbonded(_agent, amount) => {
                     info!("Found Unbonded event");
                     let store = kusama::api::CurrentEraStore::<KusamaRuntime> {
@@ -110,22 +118,34 @@ pub async fn dispatch(
                     }
                     response.send(0).unwrap();
                 }
+
                 TasksType::RelayEraIndexChanged(era_index) => {
                     info!("Start RelayEraIndexChanged task");
-
+                    let mut count = 0;
                     for (_ctr, era, amount) in unbonded_era_index_list.clone().into_iter() {
-                        if era_index.clone() - era >= RELAY_CHAIN_ERA_LOCKED {
-                            *Arc::make_mut(&mut withdraw_unbonded_amount) += amount;
-                            info!("withdraw unbonded amount {:?}", withdraw_unbonded_amount);
-                            let _ = do_relay_withdraw_unbonded(&relay_subxt_client, first)
-                                .await
-                                .map_err(|e| info!("error do_relay_withdraw_unbonded: {:?}", e));
+                        if era_index.clone() - era < RELAY_CHAIN_ERA_LOCKED {
+                            break;
+                        }
+                        let _ = do_relay_withdraw_unbonded(&relay_subxt_client, first)
+                            .await
+                            .map_err(|e| info!("error do_relay_withdraw_unbonded: {:?}", e));
+                        *withdraw_unbonded_amount.lock().await += amount;
+                        info!(
+                            "after add withdraw unbonded amount {:?}",
+                            withdraw_unbonded_amount
+                        );
+                        count += 1;
+                    }
+                    if count != 0 {
+                        for i in (count - 1)..0 {
+                            unbonded_era_index_list.remove(i);
                         }
                     }
                     response.send(0).unwrap();
                 }
+
                 TasksType::RelayWithdrawUnbonded(_agent, amount) => {
-                    info!("Start RelayWithdrawUnbonded task");
+                    info!("Start XCM transfer to para chain task");
 
                     let _ = do_xcm_transfer_to_para_chain(
                         &relay_subxt_client,
@@ -136,8 +156,11 @@ pub async fn dispatch(
                     .await
                     .map_err(|e| info!("error do_xcm_transfer_to_para_chain: {:?}", e));
 
-                    *Arc::make_mut(&mut withdraw_unbonded_amount) -= amount;
-                    info!("withdraw unbonded amount {:?}", withdraw_unbonded_amount);
+                    *withdraw_unbonded_amount.lock().await -= amount;
+                    info!(
+                        "after sub withdraw unbonded amount {:?}",
+                        withdraw_unbonded_amount
+                    );
                 }
             },
             None => info!("dispatch pending..."),
