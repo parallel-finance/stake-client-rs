@@ -216,18 +216,9 @@ pub async fn dispatch(
                         {
                             Ok(_result) => {
                                 println!(" finish processed unstake succeed");
-                                println!("#### amount:{} a:{}", amount, a);
                                 amount -= a;
                                 count = count + 1;
-                                println!(
-                                    "########## withdraw_unbonded_amount:{:?} - a:{:?}",
-                                    withdraw_unbonded_amount, a
-                                );
                                 *withdraw_unbonded_amount.lock().await -= a;
-                                println!(
-                                    "########## after - withdraw_unbonded_amount:{:?}",
-                                    withdraw_unbonded_amount
-                                );
                             }
                             Err(e) => {
                                 println!("finish processed unstake task error: {:?}", e);

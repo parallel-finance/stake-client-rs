@@ -61,10 +61,6 @@ pub(crate) async fn listen_pool_balance(
                 if let Some(account_info) = r {
                     let balance = account_info.free - account_info.frozen;
                     if balance >= MIN_WITHDRAW_BALANCE + *withdraw_unbonded_amount.lock().await {
-                        println!(
-                            "########## listen_pool_balance withdraw_unbonded_amount: {:?}",
-                            withdraw_unbonded_amount
-                        );
                         println!("[+] Pool's amount is {:?}， need to withdraw", balance);
                         let (resp_tx, resp_rx) = oneshot::channel();
                         let wa = *withdraw_unbonded_amount.lock().await;
@@ -196,10 +192,6 @@ async fn listen_withdraw_unbonded_event(
                 println!("[+] Received Withdrawn event: {:?}", &event);
                 let (resp_tx, resp_rx) = oneshot::channel();
                 *withdraw_unbonded_amount.lock().await += event.amount;
-                println!(
-                    "########## after + withdraw_unbonded_amount:{:?}",
-                    withdraw_unbonded_amount
-                );
 
                 //todo need to wait until asset has been transfered to pool address.
                 // task::sleep(time::Duration::from_secs(LISTEN_WAIT_INTERVAL)).await;
