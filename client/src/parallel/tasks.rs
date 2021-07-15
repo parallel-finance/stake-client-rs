@@ -1,9 +1,9 @@
-use crate::primitives::{AccountId, Amount, TasksType, FOR_MOCK_SEED};
 use super::transactions::{
     do_first_finish_processed_unstake, do_first_process_pending_unstake, do_first_withdraw,
     do_last_finish_processed_unstake, do_last_process_pending_unstake, do_last_withdraw,
     wait_transfer_finished,
 };
+use crate::common::primitives::{AccountId, Amount, TasksType, FOR_MOCK_SEED};
 
 use async_std::sync::{Arc, Mutex};
 use core::marker::PhantomData;

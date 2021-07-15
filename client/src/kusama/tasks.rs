@@ -1,14 +1,14 @@
 use super::transaction;
-use super::AccountId;
 use super::Amount;
 use super::HeikoRuntime;
 use super::KusamaRuntime;
 use super::TasksType;
 use super::TASK_INTERVAL;
+
+use crate::common::primitives::{AccountId, RELAY_CHAIN_ERA_LOCKED};
 use crate::kusama::transaction::{
     do_relay_unbond, do_relay_withdraw_unbonded, do_xcm_transfer_to_para_chain,
 };
-use crate::primitives::RELAY_CHAIN_ERA_LOCKED;
 
 use async_std::{
     sync::{Arc, Mutex},

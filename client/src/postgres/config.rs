@@ -1,7 +1,21 @@
-use crate::error::Result;
-use serde::Deserialize;
+use crate::common::error::Result;
 
+use db::executor::DbExecutor;
+use lazy_static::lazy_static;
+use serde::Deserialize;
 use std::{fs::read_to_string, path::Path};
+
+lazy_static! {
+    pub static ref CFG: Config =
+        Config::from_file("Config.toml").unwrap_or_else(|_| std::process::exit(1));
+    pub static ref DB: DbExecutor = {
+        let url = CFG.get_postgres_url();
+        DbExecutor::new(&url).unwrap_or_else(|err| {
+            println!("exit err:{:?}", err);
+            std::process::exit(1)
+        })
+    };
+}
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct PostgresConfig {

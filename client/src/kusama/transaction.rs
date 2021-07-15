@@ -2,12 +2,13 @@ use super::heiko;
 use super::kusama;
 use super::AccountId;
 use super::Amount;
-use super::Error;
 use super::HeikoRuntime;
 use super::KusamaRuntime;
 use super::Multisig;
-use super::MIN_BOND_BALANCE;
-use crate::primitives::{FOR_MOCK_SEED, FROM_RELAY_CHAIN_SEED, XCM_DEST_WEIGHT};
+
+use crate::common::error::Error;
+use crate::common::primitives::{FOR_MOCK_SEED, FROM_RELAY_CHAIN_SEED, XCM_DEST_WEIGHT};
+use crate::kusama::client::MIN_BOND_BALANCE;
 
 use async_std::task;
 use core::marker::PhantomData;

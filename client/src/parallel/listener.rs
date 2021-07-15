@@ -1,4 +1,4 @@
-use crate::primitives::{AccountId, TasksType, MAX_WITHDRAW_BALANCE, MIN_WITHDRAW_BALANCE};
+use crate::common::primitives::{AccountId, TasksType, MAX_WITHDRAW_BALANCE, MIN_WITHDRAW_BALANCE};
 pub use parallel_primitives::CurrencyId;
 
 use async_std::{
