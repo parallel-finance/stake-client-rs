@@ -3,7 +3,6 @@ use super::KusamaRuntime;
 use super::TasksType;
 use super::MIN_BOND_BALANCE;
 use super::{LISTEN_INTERVAL, TASK_INTERVAL};
-use crate::primitives::Amount;
 
 use async_std::{
     sync::{Arc, Mutex},

@@ -14,7 +14,6 @@ use core::marker::PhantomData;
 use log::{info, warn};
 use runtime::pallets::liquid_staking::{RecordRewardsCall, RecordSlashCall};
 use runtime::pallets::multisig::Timepoint;
-use runtime::pallets::xcm_pallet::ReserveTransferAssetsCall;
 use sp_core::{crypto::Ss58Codec, Pair};
 use sp_keyring::AccountKeyring;
 use std::str::FromStr;

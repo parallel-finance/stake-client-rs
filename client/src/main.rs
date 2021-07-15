@@ -4,11 +4,9 @@ mod crypto;
 mod error;
 mod keystore;
 mod kusama;
-mod listener;
+mod parallel;
 mod pkcs8;
 mod primitives;
-mod tasks;
-mod tasks_para;
 // mod test;
 mod wallet;
 
@@ -110,7 +108,7 @@ impl StartParaCmd {
 
         // get other signatories
         let other_signatories = keystore.get_other_signatories().unwrap();
-        let r = tasks_para::run(
+        let r = parallel::run(
             keystore.threshold,
             pair,
             other_signatories,
