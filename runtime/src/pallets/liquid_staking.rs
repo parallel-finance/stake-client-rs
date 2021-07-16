@@ -64,6 +64,7 @@ pub struct UnstakeCall<T: LiquidStaking> {
 pub struct ProcessPendingUnstakeCall<T: LiquidStaking> {
     pub agent: T::AccountId,
     pub owner: T::AccountId,
+    pub era_index: u32,
     pub amount: T::Balance,
 }
 
@@ -112,11 +113,13 @@ pub fn liquid_staking_unstake_call<'a, T: LiquidStaking>(amount: T::Balance) -> 
 pub fn liquid_staking_process_pending_unstake_call<'a, T: LiquidStaking>(
     agent: T::AccountId,
     owner: T::AccountId,
+    era_index: u32,
     amount: T::Balance,
 ) -> ProcessPendingUnstakeCall<T> {
     ProcessPendingUnstakeCall::<T> {
         agent,
         owner,
+        era_index,
         amount,
     }
 }

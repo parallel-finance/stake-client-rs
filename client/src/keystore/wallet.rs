@@ -1,8 +1,64 @@
-use crate::crypto::*;
-use crate::keystore::Keystore;
-use crate::pkcs8;
-use crate::primitives::AccountId;
+use super::crypto::*;
+use super::keystore::Keystore;
+use super::pkcs8;
+use super::AccountId;
+
 use sp_core::{blake2_256, crypto::Ss58Codec, hexdisplay::HexDisplay, Decode, Encode};
+use std::fs;
+use structopt::StructOpt;
+
+#[derive(Debug, StructOpt)]
+pub struct CreateCmd {
+    /// the keystore name
+    #[structopt(short, long, default_value = "keystore")]
+    pub name: String,
+
+    /// the threshold of multi-signature accounts
+    #[structopt(short, long)]
+    pub threshold: u16,
+
+    /// the other signatories of multi-signature accounts
+    #[structopt(short, long)]
+    pub other_signatories: Vec<String>,
+}
+
+impl CreateCmd {
+    /// Run the command
+    pub fn run(&self) {
+        let mut other_addresses = vec![];
+        for a in self.other_signatories.iter() {
+            println!("a:{:?}", a);
+            let _check = AccountId::from_ss58check(a).unwrap();
+            other_addresses.push(a);
+        }
+
+        // create multi signature keystore
+        if let Some(seed) = rpassword::read_password_from_tty(Some("Type seed:")).ok() {
+            let password = rpassword::read_password_from_tty(Some("Type password:")).ok();
+            match create_keystore(
+                password,
+                self.threshold.clone(),
+                seed,
+                self.other_signatories.clone(),
+            ) {
+                Ok(keystore) => {
+                    // create keystore file
+                    let file_name = format!("{}.json", self.name);
+                    if let Err(e) = fs::write(file_name.clone(), keystore.to_json()) {
+                        println!("failed to write to file: {:?}", e);
+                    } else {
+                        println!("keystore file created: {}\n{:?}", file_name, keystore);
+                    }
+                }
+                Err(e) => {
+                    println!("create keystore error:{:?}", e);
+                }
+            }
+        } else {
+            println!("invalid seed")
+        }
+    }
+}
 
 pub fn get_keystore(path: String) -> Result<Keystore, Box<dyn std::error::Error>> {
     let k = Keystore::parse_from_file(path).map_err(|_err| "failed to get keystore from file")?;

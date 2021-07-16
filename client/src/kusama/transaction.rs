@@ -2,19 +2,19 @@ use super::heiko;
 use super::kusama;
 use super::AccountId;
 use super::Amount;
-use super::Error;
 use super::HeikoRuntime;
 use super::KusamaRuntime;
 use super::Multisig;
-use super::MIN_BOND_BALANCE;
-use crate::primitives::{FOR_MOCK_SEED, FROM_RELAY_CHAIN_SEED};
+
+use crate::common::error::Error;
+use crate::common::primitives::{FOR_MOCK_SEED, FROM_RELAY_CHAIN_SEED, XCM_DEST_WEIGHT};
+use crate::kusama::client::MIN_BOND_BALANCE;
 
 use async_std::task;
 use core::marker::PhantomData;
 use log::{info, warn};
 use runtime::pallets::liquid_staking::{RecordRewardsCall, RecordSlashCall};
 use runtime::pallets::multisig::Timepoint;
-use runtime::pallets::xcm_pallet::ReserveTransferAssetsCall;
 use sp_core::{crypto::Ss58Codec, Pair};
 use sp_keyring::AccountKeyring;
 use std::str::FromStr;
@@ -502,7 +502,7 @@ pub(crate) async fn do_xcm_transfer_to_para_chain(
     first: bool,
 ) -> Result<(), Error> {
     if first {
-        info!("do_first_para_record_slash");
+        info!("do_xcm_transfer_to_para_chain");
         let pool_account_id = AccountId::from_string(&pool_addr)
             .map_err(|_e| Error::Other("parse pool_addr to account id error".to_string()))?;
 
@@ -524,7 +524,7 @@ pub(crate) async fn do_xcm_transfer_to_para_chain(
             dest,
             beneficiary,
             assets,
-            100_000_000,
+            XCM_DEST_WEIGHT as u64,
         );
         let result = subxt_client.watch(call, &signer).await.map_err(|e| {
             println!("{:?}", e);
