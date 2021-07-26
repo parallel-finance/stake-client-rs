@@ -1,7 +1,0 @@
-CREATE TABLE IF NOT EXISTS withdraw_tx (
-    idx INT PRIMARY KEY REFERENCES withdraw(idx) ON DELETE CASCADE ON UPDATE CASCADE,
-    tx_hash VARCHAR NOT NULL,
-    pool VARCHAR NOT NULL,
-    multisig_origin VARCHAR NOT NULL,
-    amount VARCHAR NOT NULL
-);
