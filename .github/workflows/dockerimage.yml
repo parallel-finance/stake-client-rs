@@ -8,7 +8,7 @@ on:
 
 jobs:
     dockerimage:
-        if: github.repository == 'parallel-finance/stake-client'
+        if: github.repository == 'parallel-finance/stake-client-rs'
         runs-on: ubuntu-latest
         steps:
             - name: Set up QEMU
