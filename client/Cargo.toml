@@ -12,7 +12,6 @@ blake2-rfc          = '0.2.18'
 chrono              = { version = '0.4.19', features = ['serde'] }
 clap                = "2.33.0"
 codec               = { package = "parity-scale-codec", version = "2.0.0", default-features = false }
-diesel              = { version = '1.4.6', features = ['r2d2', 'postgres', 'chrono', 'uuid'] }
 dirs                = "2.0"
 env_logger          = "0.8.3"
 frame-support       = { git = 'https://github.com/paritytech/substrate.git', branch = 'polkadot-v0.9.3', default-features = false, version = '3.0.0' }
@@ -22,7 +21,7 @@ futures-channel     = "0.3.15"
 hex                 = "0.4.0"
 lazy_static         = '1.4.0'
 log                 = "0.4.14"
-orml-tokens         = { git = 'https://github.com/open-web3-stack/open-runtime-module-library.git', default-features = false, rev = '32666fd' }
+orml-tokens         = { git = "https://github.com/open-web3-stack/open-runtime-module-library.git", default-features = false, rev = "32666fd" }
 parallel-primitives = { package = "parallel-primitives", git = "https://github.com/parallel-finance/parallel", rev = "2be3347" }
 rand                = '0.7.2'
 rpassword           = "4.0.1"

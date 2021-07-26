@@ -1,12 +1,4 @@
-// use crate::listener::listen_pool_balance;
 use crate::common::primitives::{AccountId, Amount};
-
-// use crate::DB;
-// use chrono::Utc;
-// use db::model::Withdraw;
-// use db::schema::withdraw::dsl::*;
-// use diesel::{self, insert_into, update, ExpressionMethods, QueryDsl, RunQueryDsl};
-
 use core::marker::PhantomData;
 
 use runtime::error::Error;
