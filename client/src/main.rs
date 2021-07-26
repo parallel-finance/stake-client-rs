@@ -3,8 +3,6 @@ mod common;
 mod keystore;
 mod kusama;
 mod parallel;
-mod postgres;
-// mod test;
 
 use crate::command::StakeClient;
 use structopt::StructOpt;

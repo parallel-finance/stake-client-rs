@@ -1,5 +1,5 @@
 [workspace]
-members = ["client", "db", "runtime"]
+members = ["client", "runtime"]
 
 [profile.release]
 panic = "unwind"

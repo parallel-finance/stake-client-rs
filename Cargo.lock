@@ -315,17 +315,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
-name = "backoff"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fe17f59a06fe8b87a6fc8bf53bb70b3aba76d7685f432487a68cd5552853625"
-dependencies = [
- "getrandom 0.2.3",
- "instant",
- "rand 0.8.4",
-]
-
-[[package]]
 name = "backtrace"
 version = "0.3.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -684,19 +673,6 @@ name = "data-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
-
-[[package]]
-name = "db"
-version = "0.1.0"
-dependencies = [
- "backoff",
- "chrono",
- "diesel",
- "r2d2",
- "serde",
- "thiserror",
- "tokio 1.7.1",
-]
 
 [[package]]
 name = "derivative"
@@ -5929,7 +5905,6 @@ dependencies = [
  "blake2-rfc",
  "chrono",
  "clap",
- "db",
  "diesel",
  "dirs",
  "env_logger",

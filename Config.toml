@@ -1,5 +1,0 @@
-[postgres]
-db       = "staking"
-host     = "34.134.141.35:7921"
-password = "xUkLjqwSneqEU96NRxzf7HtJ"
-username = "parallel"

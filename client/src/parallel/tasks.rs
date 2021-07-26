@@ -3,16 +3,16 @@ use super::transactions::{
     do_last_finish_processed_unstake, do_last_process_pending_unstake, do_last_withdraw,
     wait_transfer_finished,
 };
-use crate::common::primitives::{AccountId, Amount, TasksType, FOR_MOCK_SEED};
+use crate::common::primitives::{AccountId, Amount, TasksType};
 
 use async_std::sync::{Arc, Mutex};
 use core::marker::PhantomData;
-use parallel_primitives::CurrencyId;
+
 use runtime::error::Error;
 use runtime::heiko::runtime::HeikoRuntime;
 use runtime::kusama::{self, runtime::KusamaRuntime as RelayRuntime};
-use sp_core::Pair;
-use substrate_subxt::{Client, PairSigner};
+
+use substrate_subxt::Client;
 use substrate_subxt::{Error as SubError, Signer};
 use tokio::sync::{mpsc, oneshot};
 
@@ -291,33 +291,5 @@ pub(crate) async fn start_finish_processed_unstake_task_para(
             wait_transfer_finished(&para_subxt_client, multi_account_id.clone(), call_hash).await?;
         println!("[+] Create finish processed unstake transaction finished");
     }
-    Ok(())
-}
-
-async fn transfer_para_from_eve_to_pool(
-    subxt_client: &Client<HeikoRuntime>,
-    pool_account_id: AccountId,
-    amount: u128,
-) -> Result<(), Error> {
-    println!(
-        "[+] Create para chain transaction from eve to pool, amount:{:?}",
-        amount
-    );
-    let pair = sp_core::sr25519::Pair::from_string(&FOR_MOCK_SEED, None)
-        .map_err(|_err| SubError::Other("failed to create pair from seed".to_string()))?;
-    let signer = PairSigner::<HeikoRuntime, sp_core::sr25519::Pair>::new(pair.clone());
-    let pool: sp_runtime::MultiAddress<sp_runtime::AccountId32, u32> = pool_account_id.into();
-
-    let call =
-        kusama::api::currencies_transfer_call::<HeikoRuntime>(&pool, CurrencyId::KSM, amount);
-    let result = subxt_client.submit(call, &signer).await.map_err(|e| {
-        println!("{:?}", e);
-        SubError::Other("failed to create transaction".to_string())
-    })?;
-
-    println!(
-        "[+] transfer_para_from_eve_to_pool finished, para chain call hash {:?}",
-        result
-    );
     Ok(())
 }
