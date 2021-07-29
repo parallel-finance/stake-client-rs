@@ -48,7 +48,7 @@ pub struct StartRelayCmd {
     /// pool address of para chain
     #[structopt(
         long,
-        default_value = "5EYCAe5iie3Jn5XKaz6Q2bumoE3whfem8PUFtkVzeSq1yLoH"
+        default_value = "5EYCAe5iie3Jms55YSqwGAx8H5Yj4Xv84tWYmdbm1sB1EwtZ"
     )]
     pub para_pool_addr: String,
 
@@ -149,6 +149,8 @@ pub async fn run(cmd: &TemporaryCmd) -> Result<(), Error> {
     let para_subxt_client = ClientBuilder::<HeikoRuntime>::new()
         .set_url(cmd.para_ws_server.clone())
         .register_type_size::<CurrencyId>("CurrencyIdOf<T>")
+        .register_type_size::<CurrencyId>("Currency<T>")
+        .register_type_size::<CurrencyId>("Currency")
         .register_type_size::<Balance>("BalanceOf<T>")
         .register_type_size::<<HeikoRuntime as System>::AccountId>("T::AccountId")
         .register_type_size::<CurrencyId>("T::CurrencyId")

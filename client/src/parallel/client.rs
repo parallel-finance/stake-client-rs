@@ -5,10 +5,9 @@ use crate::parallel::{listener, tasks};
 use async_std::sync::{Arc, Mutex};
 use frame_support::PalletId;
 use futures::join;
-// use frame_support::PalletId;
 use parallel_primitives::{Balance, CurrencyId, PriceWithDecimal};
 use runtime::error::Error;
-use runtime::heiko::runtime::HeikoRuntime;
+use runtime::heiko::{api::ValidatorSet, runtime::HeikoRuntime};
 use runtime::kusama::runtime::KusamaRuntime as RelayRuntime;
 use sp_core::crypto::Ss58Codec;
 use structopt::StructOpt;
@@ -39,7 +38,7 @@ pub struct StartParaCmd {
     /// pool address of para chain
     #[structopt(
         long,
-        default_value = "5EYCAe5iie3Jn5XKaz6Q2bumoE3whfem8PUFtkVzeSq1yLoH"
+        default_value = "5EYCAe5iie3Jms55YSqwGAx8H5Yj4Xv84tWYmdbm1sB1EwtZ"
     )]
     pub para_pool_addr: String,
 
@@ -54,9 +53,6 @@ pub struct StartParaCmd {
 
 impl StartParaCmd {
     pub async fn run(&self) {
-        // let account_id: AccountId = PalletId(*b"par/stak").into_account();
-        // println!("palletId address:{}", account_id.to_string());
-
         // get pair
         let password: Option<String>;
         match &self.password {
@@ -104,8 +100,11 @@ pub async fn run(
     let para_subxt_client = ClientBuilder::<HeikoRuntime>::new()
         .set_url(para_ws_server)
         .register_type_size::<CurrencyId>("CurrencyIdOf<T>")
+        .register_type_size::<CurrencyId>("Currency<T>")
+        .register_type_size::<CurrencyId>("Currency")
         .register_type_size::<Balance>("BalanceOf<T>")
         .register_type_size::<<HeikoRuntime as System>::AccountId>("T::AccountId")
+        .register_type_size::<ValidatorSet<HeikoRuntime>>("ValidatorSet<T>")
         .register_type_size::<CurrencyId>("T::CurrencyId")
         .register_type_size::<Balance>("T::Balance")
         .register_type_size::<CurrencyId>("T::OracleKey")
