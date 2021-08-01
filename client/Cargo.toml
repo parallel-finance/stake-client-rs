@@ -40,7 +40,7 @@ substrate-subxt     = { version = "0.15.0", git = "https://github.com/parallel-f
 thiserror           = "1.0.24"
 toml                = "0.5.8"
 
-xcm = { git = 'https://github.com/paritytech/polkadot.git', branch = 'release-v0.9.5', default-features = false }
+xcm = { git = 'https://github.com/paritytech/polkadot.git', branch = 'release-v0.9.8', default-features = false }
 
 tokio = { version = '0.2.25', features = ['full'] }
 [features]

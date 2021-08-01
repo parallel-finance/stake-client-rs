@@ -6813,8 +6813,8 @@ checksum = "85e60b0d1b5f99db2556934e21937020776a5d31520bf169e851ac44e6420214"
 
 [[package]]
 name = "xcm"
-version = "0.9.5"
-source = "git+https://github.com/paritytech/polkadot.git?branch=release-v0.9.5#3ce09da502dd74d88f24d76f579d19fd4e6c5624"
+version = "0.9.8"
+source = "git+https://github.com/paritytech/polkadot.git?branch=release-v0.9.8#3a10ee63c0b5703a1c802db3438ab7e01344a8ce"
 dependencies = [
  "derivative",
  "impl-trait-for-tuples",
